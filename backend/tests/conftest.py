@@ -4,13 +4,14 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers all tables on Base.metadata)
 from app.db.base import Base
-from app.db.session import get_db
+from app.db.session import get_db, get_session_factory
+from app.jobs.runner import InlineJobRunner, get_job_runner
 from app.main import app
 
 # Dedicated test database (created by scripts/initdb) — never the dev database,
@@ -39,26 +40,41 @@ def db_engine() -> Iterator[Engine]:
 
 
 @pytest.fixture
-def db_session(db_engine: Engine) -> Iterator[Session]:
-    """Each test runs inside a transaction that is rolled back afterwards."""
+def db_connection(db_engine: Engine) -> Iterator[Connection]:
+    """Everything a test does happens inside one transaction, rolled back at the end."""
     connection = db_engine.connect()
     transaction = connection.begin()
-    factory = sessionmaker(bind=connection, join_transaction_mode="create_savepoint")
-    session = factory()
     try:
-        yield session
+        yield connection
     finally:
-        session.close()
         transaction.rollback()
         connection.close()
 
 
 @pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
+def db_session_factory(db_connection: Connection) -> sessionmaker[Session]:
+    # create_savepoint turns commit() into a nested savepoint commit, so app
+    # code can commit freely while the outer test transaction stays rollbackable.
+    return sessionmaker(bind=db_connection, join_transaction_mode="create_savepoint")
+
+
+@pytest.fixture
+def db_session(db_session_factory: sessionmaker[Session]) -> Iterator[Session]:
+    session = db_session_factory()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def client(db_session: Session, db_session_factory: sessionmaker[Session]) -> Iterator[TestClient]:
     def _get_db() -> Iterator[Session]:
         yield db_session
 
     app.dependency_overrides[get_db] = _get_db
+    app.dependency_overrides[get_session_factory] = lambda: db_session_factory
+    app.dependency_overrides[get_job_runner] = InlineJobRunner
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

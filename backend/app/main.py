@@ -10,7 +10,7 @@ from app.services.errors import ConflictError, NotFoundError, ValidationFailedEr
 _ERROR_STATUS: dict[type[Exception], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
-    ValidationFailedError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ValidationFailedError: status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 
 

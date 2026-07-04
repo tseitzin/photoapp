@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     thumbnail_cache_dir: Path = Path("~/.aperture/thumbnails")
     quarantine_dir: Path = Path("~/.aperture/quarantine")
     cors_origin: str = "http://localhost:5173"
+    # -1 = one process per core minus one; 0 = in-process serial (tests/debugging)
+    scan_workers: int = -1
+    scan_batch_size: int = 500
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod

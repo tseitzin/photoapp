@@ -17,6 +17,10 @@ strict = true
 plugins = ["pydantic.mypy"]
 files = ["app"]
 
+[[tool.mypy.overrides]]
+module = ["pillow_heif.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
