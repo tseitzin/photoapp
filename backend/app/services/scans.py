@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 from sqlalchemy import select
@@ -156,12 +157,18 @@ def _roots_for(session: Session, scan: Scan) -> list[ScanRoot]:
 @contextmanager
 def _batch_processor(workers: int) -> Iterator[BatchProcessor]:
     """Serial when workers=0; otherwise a process pool for CPU-bound decode/hash."""
+    settings = get_settings()
+    worker_fn = partial(
+        process_file,
+        thumb_dir=str(settings.thumbnail_cache_dir),
+        thumb_size=settings.thumbnail_size,
+    )
     if workers == 0:
-        yield lambda paths: [process_file(path) for path in paths]
+        yield lambda paths: [worker_fn(path) for path in paths]
         return
     max_workers = workers if workers > 0 else max(1, (os.cpu_count() or 2) - 1)
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        yield lambda paths: list(pool.map(process_file, paths, chunksize=8))
+        yield lambda paths: list(pool.map(worker_fn, paths, chunksize=8))
 
 
 def _scan_root(
@@ -242,6 +249,7 @@ def _apply_result(
         "camera_make": meta.camera_make if meta else None,
         "camera_model": meta.camera_model if meta else None,
         "exif": meta.exif if meta else None,
+        "phash": result.phash,
         "last_error": result.error,
         "status": "active",
     }
@@ -326,6 +334,7 @@ def _record_move(session: Session, scan: Scan, info: ExistingFile, new_path: str
             "camera_model",
             "exif",
             "sha256",
+            "phash",
             "last_error",
         )
     }

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from PIL import ExifTags, Image
+from PIL import ExifTags, Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -93,25 +93,34 @@ def _exif_to_dict(exif: Image.Exif) -> dict[str, Any]:
     return result
 
 
+def read_metadata(image: Image.Image, width: int, height: int) -> ImageMetadata:
+    """Extract metadata from an already-decoded image.
+
+    Width/height are passed in so callers can supply orientation-corrected
+    dimensions (what the user actually sees).
+    """
+    exif = image.getexif()
+    try:
+        exif_ifd: dict[int, object] = dict(exif.get_ifd(ExifTags.IFD.Exif))
+    except Exception:  # noqa: BLE001
+        exif_ifd = {}
+
+    captured_at = _parse_exif_datetime(
+        exif_ifd.get(_TAG_DATETIME_ORIGINAL)
+    ) or _parse_exif_datetime(exif.get(_TAG_DATETIME))
+
+    return ImageMetadata(
+        width=width,
+        height=height,
+        captured_at=captured_at,
+        camera_make=_clean_str(exif.get(_TAG_MAKE)),
+        camera_model=_clean_str(exif.get(_TAG_MODEL)),
+        exif=_exif_to_dict(exif),
+    )
+
+
 def extract_metadata(data: bytes) -> ImageMetadata:
     """Decode ``data`` and return metadata. Raises on undecodable input."""
     with Image.open(io.BytesIO(data)) as image:
-        width, height = image.size
-        exif = image.getexif()
-        try:
-            exif_ifd: dict[int, object] = dict(exif.get_ifd(ExifTags.IFD.Exif))
-        except Exception:  # noqa: BLE001
-            exif_ifd = {}
-
-        captured_at = _parse_exif_datetime(
-            exif_ifd.get(_TAG_DATETIME_ORIGINAL)
-        ) or _parse_exif_datetime(exif.get(_TAG_DATETIME))
-
-        return ImageMetadata(
-            width=width,
-            height=height,
-            captured_at=captured_at,
-            camera_make=_clean_str(exif.get(_TAG_MAKE)),
-            camera_model=_clean_str(exif.get(_TAG_MODEL)),
-            exif=_exif_to_dict(exif),
-        )
+        oriented = ImageOps.exif_transpose(image)
+        return read_metadata(image, oriented.width, oriented.height)

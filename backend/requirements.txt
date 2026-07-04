@@ -7,3 +7,5 @@ alembic>=1.14,<2
 psycopg[binary]>=3.2,<4
 Pillow>=11,<12
 pillow-heif>=0.21,<1
+# Battle-tested perceptual hashing (pulls numpy/scipy/PyWavelets)
+ImageHash>=4.3,<5

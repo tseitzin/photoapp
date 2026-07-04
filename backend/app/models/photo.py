@@ -33,6 +33,8 @@ class Photo(Base):
     camera_model: Mapped[str | None] = mapped_column(Text)
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    # 64-bit perceptual hash stored signed; LSH band columns arrive in Phase 5.
+    phash: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(
         String(12), default="active", server_default="active", index=True
     )

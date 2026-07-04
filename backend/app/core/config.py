@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     scan_batch_size: int = 500
     # Mark scans orphaned by a crash/restart as failed on startup (off in tests).
     recover_scans_on_startup: bool = True
+    # Longest-edge pixels: grid thumbnails (generated during scans) and
+    # lightbox previews (generated on first request).
+    thumbnail_size: int = 512
+    preview_size: int = 2048
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod
