@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#141416;font-family:'Helvetica Neue',Helvetica,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- top bar -->
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--bar);border-bottom:1px solid var(--border)">
+    <a href="Home.dc.html" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit">
+      <div style="width:22px;height:22px;border-radius:6px;background:var(--accent)"></div>
+      <span style="font-weight:600;letter-spacing:-.01em">Aperture</span>
+    </a>
+    <div style="width:1px;height:22px;background:var(--border)"></div>
+    <a href="Home.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Home</a>
+    <a href="Library.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--fg);font-size:13px;font-weight:600;background:var(--chip)">Library</a>
+    <a href="Duplicate%20Compare.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Duplicates</a>
+    <a href="Organize.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Organize</a>
+    <div style="flex:1;max-width:440px;display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--chip);border-radius:8px;color:var(--muted)">
+      <span style="font-size:13px">&#9906;</span><span style="font-size:12.5px">Search 48,210 photos&hellip;</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;font-size:12.5px">
+      <sc-for list="{{ seg }}" as="s" hint-placeholder-count="4">
+        <span onClick="{{ s.onClick }}" style="padding:5px 13px;border-radius:6px;cursor:pointer;background:{{ s.bg }};color:{{ s.fg }};font-weight:{{ s.weight }};box-shadow:{{ s.shadow }}">{{ s.label }}</span>
+      </sc-for>
+    </div>
+    <div onClick="{{ toggleTheme }}" style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;cursor:pointer;font-size:13px">
+      <span style="{{ lightBtn }}">&#9728;</span>
+      <span style="{{ darkBtn }}">&#9789;</span>
+    </div>
+    <div style="width:30px;height:30px;border-radius:50%;background:oklch(0.58 0.08 30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">JD</div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- sidebar -->
+    <div style="width:266px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);border-right:1px solid var(--border)">
+      <div style="flex:1;overflow:auto;padding:14px 10px 0">
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;color:var(--muted);padding:0 8px 8px">LIBRARY</div>
+        <sc-for list="{{ tree }}" as="row" hint-placeholder-count="8">
+          <div onClick="{{ row.onRow }}" style="display:flex;align-items:center;gap:8px;height:30px;padding-right:8px;padding-left:{{ row.pad }}px;border-radius:7px;cursor:pointer" style-hover="background:var(--hover)">
+            <span onClick="{{ row.onChev }}" style="width:14px;color:var(--muted);font-size:9px;text-align:center;cursor:pointer">{{ row.chev }}</span>
+            <span style="width:15px;height:15px;flex:none;border-radius:4px;border:1.5px solid var(--cb-border);background:{{ row.cbBg }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">{{ row.cbMark }}</span>
+            <span style="width:12px;height:10px;flex:none;border-radius:2px;background:var(--folder)"></span>
+            <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ row.weight }}">{{ row.name }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">{{ row.count }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;margin:10px;padding:13px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:3px">Selected for organizing</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:11px">{{ selFolders }} folders &middot; <span style="font-family:ui-monospace,Menlo,monospace">{{ selPhotosStr }}</span> photos</div>
+        <div style="display:flex;gap:8px">
+          <a href="Organize.dc.html" style="flex:1;height:32px;border-radius:8px;background:var(--accent);color:var(--organize-fg);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:none">Organize</a>
+          <a href="Duplicate%20Compare.dc.html" style="flex:1;height:32px;border-radius:8px;background:var(--chip);color:var(--fg);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:none">Find dupes</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- center -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--grid-bg)">
+      <div style="height:46px;flex:none;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--bar);border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--sub)">Pictures</span><span style="color:var(--muted)">/</span>
+        <span style="font-size:13px;font-weight:600">All photos</span>
+        <div style="flex:1"></div>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)">48,210 photos</span>
+        <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;border-radius:8px;background:var(--chip);font-size:12.5px;cursor:pointer">Sort: Capture date <span style="color:var(--muted);font-size:9px">&#9662;</span></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--muted)">&#8722;</span>
+          <div style="width:88px;height:4px;border-radius:2px;background:var(--border);position:relative"><div style="position:absolute;left:0;top:-4px;width:60%;height:4px;border-radius:2px;background:var(--muted)"></div><div style="position:absolute;left:56%;top:-4px;width:12px;height:12px;border-radius:50%;background:var(--card);border:1px solid var(--cb-border);box-shadow:0 1px 2px rgba(0,0,0,.15)"></div></div>
+          <span style="font-size:13px;color:var(--muted)">+</span>
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px 18px">
+        <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="3">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:600">{{ sec.title }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">{{ sec.sub }}</span>
+            <div style="flex:1;height:1px;background:var(--divider)"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;margin-bottom:26px">
+            <sc-for list="{{ sec.thumbs }}" as="t" hint-placeholder-count="14">
+              <div onClick="{{ t.onClick }}" style="position:relative;aspect-ratio:1;border-radius:4px;overflow:hidden;background:{{ t.bg }};cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.13)" style-hover="box-shadow:0 5px 14px rgba(0,0,0,.28)">
+                <sc-if value="{{ t.sel }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;border-radius:4px;box-shadow:inset 0 0 0 3px var(--accent)"></div></sc-if>
+                <sc-if value="{{ t.fav }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:5px;right:6px;color:#ffd24a;font-size:12px;text-shadow:0 1px 2px rgba(0,0,0,.4)">&#9733;</span></sc-if>
+                <sc-if value="{{ t.raw }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:5px;left:5px;font-family:ui-monospace,Menlo,monospace;font-size:8px;font-weight:700;letter-spacing:.06em;color:#fff;background:rgba(0,0,0,.45);padding:1px 4px;border-radius:3px">RAW</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- right panel -->
+    <div style="width:302px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);border-left:1px solid var(--border);overflow:hidden">
+      <div style="padding:16px 16px 0">
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin-bottom:11px">FILTERS</div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:7px">File type</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px">
+          <sc-for list="{{ fileTypes }}" as="f" hint-placeholder-count="4">
+            <div onClick="{{ f.onClick }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;font-size:12px;cursor:pointer;{{ f.style }}">{{ f.t }} <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;opacity:.7">{{ f.c }}</span></div>
+          </sc-for>
+        </div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:7px">Camera</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:16px">
+          <sc-for list="{{ cameras }}" as="c" hint-placeholder-count="4">
+            <div onClick="{{ c.onClick }}" style="display:flex;align-items:center;gap:9px;height:28px;cursor:pointer">
+              <span style="width:15px;height:15px;border-radius:4px;border:1.5px solid var(--cb-border);background:{{ c.cbBg }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px">{{ c.cbMark }}</span>
+              <span style="flex:1;font-size:12.5px">{{ c.t }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">{{ c.c }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:7px">Minimum rating</div>
+        <div style="display:flex;gap:4px;font-size:15px;color:#ffb01f">&#9733;&#9733;&#9733;<span style="color:var(--star-dim)">&#9733;&#9733;</span></div>
+      </div>
+      <div style="height:1px;background:var(--divider);margin:16px"></div>
+      <div style="padding:0 16px 16px;overflow:auto">
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin-bottom:12px">METADATA</div>
+        <div style="aspect-ratio:3/2;border-radius:8px;background:{{ selBg }};margin-bottom:12px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)"></div>
+        <div style="font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:600;margin-bottom:10px">{{ selName }}</div>
+        <sc-for list="{{ meta }}" as="m" hint-placeholder-count="6">
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--divider);font-size:12px">
+            <span style="color:var(--muted)">{{ m.k }}</span><span style="font-weight:500">{{ m.v }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="position:fixed;inset:0;z-index:60;flex-direction:column;background:rgba(9,9,11,.95);display:{{ lbDisplay }}">
+  <!-- top bar -->
+  <div style="height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;color:#e7e7ea">
+    <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600">{{ selName }}</span>
+    <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#8a8a92">{{ lbCounter }}</span>
+    <div style="flex:1"></div>
+    <div style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ lbFavColor }};cursor:pointer">&#9733;</div>
+    <div style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:15px;color:#cfcfd4;cursor:pointer">&#8635;</div>
+    <div onClick="{{ closeLightbox }}" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:20px;color:#e7e7ea;cursor:pointer">&times;</div>
+  </div>
+  <!-- stage -->
+  <div style="flex:1;display:flex;align-items:center;gap:16px;padding:0 18px;min-height:0">
+    <div onClick="{{ lbPrev }}" style="width:48px;height:48px;flex:none;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:24px;color:#e7e7ea;cursor:pointer">&#8249;</div>
+    <div style="flex:1;height:100%;display:flex;align-items:center;justify-content:center;padding:8px 0;min-width:0">
+      <div style="width:min(1080px,100%);aspect-ratio:3/2;max-height:100%;border-radius:8px;background:{{ lbBg }};box-shadow:0 24px 70px rgba(0,0,0,.55)"></div>
+    </div>
+    <div onClick="{{ lbNext }}" style="width:48px;height:48px;flex:none;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:24px;color:#e7e7ea;cursor:pointer">&#8250;</div>
+  </div>
+  <!-- metadata row -->
+  <div style="flex:none;display:flex;justify-content:center;gap:34px;padding:14px 20px 12px;color:#c8c8ce">
+    <sc-for list="{{ lbMeta }}" as="m" hint-placeholder-count="5">
+      <div style="text-align:center">
+        <div style="font-size:10px;letter-spacing:.06em;color:#77777f;margin-bottom:3px;text-transform:uppercase">{{ m.k }}</div>
+        <div style="font-size:12.5px;font-weight:500;font-family:ui-monospace,Menlo,monospace">{{ m.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <!-- filmstrip -->
+  <div style="flex:none;height:80px;display:flex;align-items:center;gap:7px;padding:0 20px 14px;overflow-x:auto">
+    <sc-for list="{{ lbFilm }}" as="t" hint-placeholder-count="40">
+      <div onClick="{{ t.onClick }}" style="width:64px;height:64px;flex:none;border-radius:5px;background:{{ t.bg }};box-shadow:{{ t.ring }};opacity:{{ t.op }};cursor:pointer"></div>
+    </sc-for>
+  </div>
+</div></x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    theme: (typeof localStorage !== 'undefined' && localStorage.getItem('aperture-theme')) || 'light',
+    groupBy: 'Folders',
+    selIndex: 2,
+    lightboxOpen: false,
+    expanded: { pics: true, y24: true },
+    checkedIds: { iceland: true, summer: true },
+    ftOn: [true, true, false, false],
+    camOn: [true, true, false, false],
+  };
+  rng(seed){ let r = seed >>> 0; return () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; }; }
+  makeThumbs(n, seed){
+    const pals = [['#8f9c8a','#71806c'],['#b6a389','#9c8468'],['#7c8aa0','#5f6d87'],['#a68a84','#8c6f69'],['#9a9488','#7e786b'],['#6f9098','#547a82'],['#ada2b0','#8f8296'],['#909b6d','#74804c'],['#a0876f','#856a52'],['#7f9488','#5f766a'],['#b0968a','#977367'],['#8aa0a4','#688487']];
+    const rand = this.rng(seed); const a = [];
+    for (let i = 0; i < n; i++) {
+      const p = pals[Math.floor(rand() * pals.length)];
+      const ang = 20 + Math.floor(rand() * 140);
+      a.push({ bg: 'linear-gradient(' + ang + 'deg, ' + p[0] + ', ' + p[1] + ')', fav: rand() > 0.86, raw: rand() > 0.82 });
+    }
+    return a;
+  }
+  paletteVars(dark){
+    const L = '--app-bg:#fbfbfc;--bar:#fff;--border:#e6e6e9;--fg:#26262b;--sub:#83838a;--muted:#a0a0a6;--sidebar:#f6f6f8;--grid-bg:#f2f2f4;--chip:#f1f1f3;--card:#fff;--divider:#e6e6e9;--accent:oklch(0.6 0.09 250);--hover:#ececef;--cb-border:#cfcfd4;--folder:oklch(0.78 0.05 90);--seg-bg:#ececed;--seg-active-bg:#fff;--seg-active-fg:#26262b;--organize-fg:#fff;--chip-on-bg:oklch(0.94 0.03 250);--chip-on-bd:oklch(0.78 0.07 250);--chip-on-fg:oklch(0.42 0.09 250);--chip-off-bg:#fff;--chip-off-bd:#e2e2e6;--chip-off-fg:#5a5a60;--star-dim:#d6d6da';
+    const D = '--app-bg:#141416;--bar:#1c1c1f;--border:#29292e;--fg:#e7e7ea;--sub:#8a8a92;--muted:#77777f;--sidebar:#1a1a1d;--grid-bg:#111113;--chip:#26262a;--card:#222226;--divider:#29292e;--accent:oklch(0.68 0.1 250);--hover:#26262b;--cb-border:#3d3d44;--folder:oklch(0.62 0.05 90);--seg-bg:#26262a;--seg-active-bg:#3a3a41;--seg-active-fg:#e7e7ea;--organize-fg:#0e0e12;--chip-on-bg:oklch(0.32 0.06 250);--chip-on-bd:oklch(0.5 0.08 250);--chip-on-fg:oklch(0.86 0.06 250);--chip-off-bg:#26262a;--chip-off-bd:#33333a;--chip-off-fg:#9a9aa0;--star-dim:#3d3d44';
+    return dark ? D : L;
+  }
+  toggleFolder(id){ this.setState(s => { const c = Object.assign({}, s.checkedIds); if (c[id]) delete c[id]; else c[id] = true; return { checkedIds: c }; }); }
+  toggleExpand(id){ this.setState(s => ({ expanded: Object.assign({}, s.expanded, { [id]: !s.expanded[id] }) })); }
+  toggleFt(i){ this.setState(s => { const a = s.ftOn.slice(); a[i] = !a[i]; return { ftOn: a }; }); }
+  toggleCam(i){ this.setState(s => { const a = s.camOn.slice(); a[i] = !a[i]; return { camOn: a }; }); }
+  openLightbox(i){ this.setState({ selIndex: i, lightboxOpen: true }); }
+  closeLightbox(){ this.setState({ lightboxOpen: false }); }
+  step(d){ this.setState(s => ({ selIndex: (s.selIndex + d + 40) % 40 })); }
+  componentDidMount(){
+    this._onKey = (e) => {
+      if (!this.state.lightboxOpen) return;
+      if (e.key === 'Escape') this.closeLightbox();
+      else if (e.key === 'ArrowRight') this.step(1);
+      else if (e.key === 'ArrowLeft') this.step(-1);
+    };
+    window.addEventListener('keydown', this._onKey);
+  }
+  componentWillUnmount(){ if (this._onKey) window.removeEventListener('keydown', this._onKey); }
+  nodes(){
+    return [
+      { id:'pics', name:'Pictures', count:'48,210', num:48210, depth:0, parent:null, kids:true },
+      { id:'y24', name:'2024', count:'12,847', num:12847, depth:1, parent:'pics', kids:true },
+      { id:'iceland', name:'Iceland Trip', count:'2,104', num:2104, depth:2, parent:'y24', kids:false },
+      { id:'summer', name:'Summer', count:'3,890', num:3890, depth:2, parent:'y24', kids:false },
+      { id:'screens', name:'Screenshots', count:'1,203', num:1203, depth:2, parent:'y24', kids:false },
+      { id:'y23', name:'2023', count:'18,332', num:18332, depth:1, parent:'pics', kids:false },
+      { id:'lr', name:'Lightroom Exports', count:'6,540', num:6540, depth:1, parent:'pics', kids:false },
+      { id:'iphone', name:'iPhone Backup', count:'9,988', num:9988, depth:1, parent:'pics', kids:false },
+      { id:'cam', name:'Camera Imports', count:'1,043', num:1043, depth:1, parent:'pics', kids:false },
+    ];
+  }
+  tree(){
+    const nodes = this.nodes(); const byId = {}; nodes.forEach(n => byId[n.id] = n);
+    const exp = this.state.expanded; const chk = this.state.checkedIds;
+    const isVis = (n) => { if (!n.parent) return true; return !!exp[n.parent] && isVis(byId[n.parent]); };
+    return nodes.filter(isVis).map(n => {
+      const checked = !!chk[n.id];
+      return {
+        name: n.name, count: n.count, pad: 12 + n.depth * 18,
+        chev: n.kids ? (exp[n.id] ? '\u25be' : '\u25b8') : '',
+        weight: n.depth === 0 ? 600 : 400,
+        cbBg: checked ? 'var(--accent)' : 'transparent', cbMark: checked ? '\u2713' : '',
+        onRow: () => this.toggleFolder(n.id),
+        onChev: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.toggleExpand(n.id); },
+      };
+    });
+  }
+  seg(){
+    return ['Folders','Date','Camera','Location'].map(l => {
+      const on = this.state.groupBy === l;
+      return { label: l, onClick: () => this.setState({ groupBy: l }), bg: on ? 'var(--seg-active-bg)' : 'transparent', fg: on ? 'var(--seg-active-fg)' : 'var(--sub)', weight: on ? 600 : 400, shadow: on ? '0 1px 2px rgba(0,0,0,.09)' : 'none' };
+    });
+  }
+  fileTypes(){
+    const d = [['JPEG','31,204'],['RAW','9,880'],['PNG','4,120'],['HEIC','2,706']];
+    return d.map((x, i) => {
+      const on = this.state.ftOn[i];
+      const style = on ? 'background:var(--chip-on-bg);border:1px solid var(--chip-on-bd);color:var(--chip-on-fg)' : 'background:var(--chip-off-bg);border:1px solid var(--chip-off-bd);color:var(--chip-off-fg)';
+      return { t: x[0], c: x[1], style, onClick: () => this.toggleFt(i) };
+    });
+  }
+  cameras(){
+    const d = [['Sony A7 IV','8,204'],['iPhone 15 Pro','19,332'],['Canon R6','5,110'],['Screenshots','1,203']];
+    return d.map((x, i) => {
+      const on = this.state.camOn[i];
+      return { t: x[0], c: x[1], cbBg: on ? 'var(--accent)' : 'transparent', cbMark: on ? '\u2713' : '', onClick: () => this.toggleCam(i) };
+    });
+  }
+  meta(){
+    return [['Dimensions','7008 \u00d7 4672'],['Size','48.2 MB'],['Camera','Sony A7 IV'],['Lens','24\u201370mm f/2.8'],['Exposure','1/500s \u00b7 f/4 \u00b7 ISO 200'],['Captured','Jul 2, 2024 18:24']].map(m => ({ k: m[0], v: m[1] }));
+  }
+  thumbsList(){ return this.makeThumbs(40, 7); }
+  groupSections(){
+    const base = this.thumbsList();
+    const defs = {
+      Folders: [['Iceland Trip','2,104 photos',14],['Summer','3,890 photos',14],['Camera Imports','1,043 photos',12]],
+      Date: [['July 2024','214 photos',14],['June 2024','318 photos',14],['May 2024','176 photos',12]],
+      Camera: [['Sony A7 IV','8,204 photos',14],['iPhone 15 Pro','19,332 photos',14],['Canon R6','5,110 photos',12]],
+      Location: [['Reykjav\u00edk','412 photos',14],['V\u00edk \u00ed M\u00fdrdal','208 photos',14],['Home','1,904 photos',12]],
+    };
+    const list = defs[this.state.groupBy] || defs.Folders;
+    let idx = 0;
+    return list.map(d => {
+      const thumbs = [];
+      for (let k = 0; k < d[2]; k++) {
+        const i = idx % base.length; const t = base[i];
+        thumbs.push({ bg: t.bg, fav: t.fav, raw: t.raw, sel: i === this.state.selIndex, onClick: () => this.openLightbox(i) });
+        idx++;
+      }
+      return { title: d[0], sub: d[1], thumbs };
+    });
+  }
+  renderVals(){
+    const dark = this.state.theme === 'dark';
+    const active = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--seg-active-bg);color:var(--seg-active-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const inactive = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--muted)';
+    const base = this.thumbsList();
+    let f = 0, p = 0;
+    this.nodes().forEach(n => { if (this.state.checkedIds[n.id]) { f++; p += n.num; } });
+    const selThumb = base[this.state.selIndex] || { bg: 'linear-gradient(120deg,#7c8aa0,#5f6d87)' };
+    return {
+      rootStyle: this.paletteVars(dark) + ';display:flex;flex-direction:column;height:100vh;background:var(--app-bg);color:var(--fg);font-size:13px',
+      lightBtn: dark ? inactive : active,
+      darkBtn: dark ? active : inactive,
+      toggleTheme: () => this.setState(s => { const t = s.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('aperture-theme', t); } catch (e) {} return { theme: t }; }),
+      tree: this.tree(),
+      seg: this.seg(),
+      sections: this.groupSections(),
+      fileTypes: this.fileTypes(),
+      cameras: this.cameras(),
+      meta: this.meta(),
+      thumbs: base.map((t, i) => ({ bg: t.bg, fav: t.fav, raw: t.raw, sel: i === this.state.selIndex, onClick: () => this.openLightbox(i) })),
+      selFolders: f,
+      selPhotosStr: p.toLocaleString('en-US'),
+      selName: 'IMG_' + (4800 + this.state.selIndex) + '.ARW',
+      selBg: selThumb.bg,
+      lbDisplay: this.state.lightboxOpen ? 'flex' : 'none',
+      lbBg: selThumb.bg,
+      lbCounter: (this.state.selIndex + 1) + ' / 40',
+      lbFavColor: selThumb.fav ? '#ffd24a' : 'rgba(255,255,255,.35)',
+      lbMeta: [['Dimensions', '7008 × 4672'], ['Size', '48.2 MB'], ['Camera', 'Sony A7 IV'], ['ISO', '200 · f/4 · 1/500s'], ['Captured', 'Jul 2, 2024 18:24']].map(m => ({ k: m[0], v: m[1] })),
+      lbFilm: base.map((t, i) => ({ bg: t.bg, ring: i === this.state.selIndex ? 'inset 0 0 0 2px oklch(0.72 0.13 250)' : 'inset 0 0 0 1px rgba(255,255,255,.08)', op: i === this.state.selIndex ? '1' : '0.55', onClick: () => this.setState({ selIndex: i }) })),
+      openLightbox: (i) => this.openLightbox(i),
+      closeLightbox: () => this.closeLightbox(),
+      lbNext: () => this.step(1),
+      lbPrev: () => this.step(-1),
+    };
+  }
+}
+</script>
+</body>
+</html>

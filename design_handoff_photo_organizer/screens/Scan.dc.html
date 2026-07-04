@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#141416;font-family:'Helvetica Neue',Helvetica,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+@keyframes apPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.12);opacity:.75}}
+@keyframes apRing{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- top bar -->
+  <div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--bar);border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--accent)"></div><span style="font-weight:600">Aperture</span></div>
+    <div style="flex:1"></div>
+    <div onClick="{{ toggleTheme }}" style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;cursor:pointer;font-size:13px">
+      <span style="{{ lightBtn }}">&#9728;</span><span style="{{ darkBtn }}">&#9789;</span>
+    </div>
+  </div>
+
+  <div style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center">
+    <div style="width:640px;max-width:100%;padding:44px 32px 60px">
+
+      <!-- ============ SETUP PHASE ============ -->
+      <sc-if value="{{ isSetup }}" hint-placeholder-val="{{ true }}">
+        <div style="width:52px;height:52px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--organize-fg);margin-bottom:20px">&#9906;</div>
+        <div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">Let&rsquo;s find your photos</div>
+        <div style="font-size:14px;color:var(--sub);line-height:1.5;margin-bottom:28px">Choose the drives and folders to index. Aperture reads file locations only &mdash; it never moves or copies anything until you tell it to.</div>
+
+        <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Sources</div>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:14px">
+          <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
+            <div onClick="{{ s.onToggle }}" style="display:flex;align-items:center;gap:13px;padding:14px 16px;background:var(--card);border:1.5px solid {{ s.bd }};border-radius:12px;cursor:pointer">
+              <span style="width:20px;height:20px;flex:none;border-radius:6px;border:1.5px solid var(--cb-border);background:{{ s.cbBg }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px">{{ s.cbMark }}</span>
+              <div style="width:30px;height:30px;flex:none;border-radius:8px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--sub)">{{ s.icon }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.path }}</div>
+                <div style="font-size:12px;color:var(--sub);margin-top:2px">{{ s.detail }}</div>
+              </div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)">{{ s.size }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:44px;border:1px dashed var(--cb-border);border-radius:12px;display:flex;align-items:center;justify-content:center;gap:7px;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:24px">+ Add a folder</div>
+
+        <div style="display:flex;align-items:center;gap:14px;padding:16px 18px;background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:28px">
+          <div style="flex:1">
+            <div style="font-size:13.5px;font-weight:600;margin-bottom:2px">Include subfolders</div>
+            <div style="font-size:12px;color:var(--sub)">Recurse into every folder inside the sources above.</div>
+          </div>
+          <div onClick="{{ toggleSub }}" style="width:44px;height:25px;border-radius:13px;background:{{ subTrack }};position:relative;cursor:pointer;flex:none">
+            <div style="position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transform:{{ subKnob }};transition:transform .15s"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px">
+          <div onClick="{{ startScan }}" style="height:46px;display:flex;align-items:center;padding:0 26px;border-radius:11px;background:var(--accent);color:var(--organize-fg);font-size:14px;font-weight:600;cursor:pointer">Start scan</div>
+          <span style="font-size:12.5px;color:var(--muted)">{{ sourceSummary }}</span>
+        </div>
+      </sc-if>
+
+      <!-- ============ SCANNING PHASE ============ -->
+      <sc-if value="{{ isScanning }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:26px">
+          <div style="width:46px;height:46px;flex:none;position:relative">
+            <div style="position:absolute;inset:0;border-radius:50%;border:3px solid var(--border)"></div>
+            <div style="position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:var(--accent);animation:apRing .9s linear infinite"></div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--accent);animation:apPulse 1.6s ease-in-out infinite">&#9906;</div>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:22px;font-weight:700;letter-spacing:-.02em">Scanning your drives&hellip;</div>
+            <div style="font-size:13px;color:var(--sub);font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ curPath }}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <span style="font-size:13px;color:var(--sub)"><span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--fg)">{{ foundStr }}</span> of ~48,210 photos</span>
+          <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;color:var(--accent)">{{ pct }}%</span>
+        </div>
+        <div style="height:10px;border-radius:5px;background:var(--chip);overflow:hidden;margin-bottom:28px"><div style="height:10px;border-radius:5px;background:var(--accent);width:{{ pct }}%;transition:width .12s linear"></div></div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+          <sc-for list="{{ scanStats }}" as="st" hint-placeholder-count="4">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+              <div style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:7px">{{ st.k }}</div>
+              <div style="font-size:20px;font-weight:700;font-family:ui-monospace,Menlo,monospace;letter-spacing:-.01em">{{ st.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Recently indexed</div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:26px">
+          <sc-for list="{{ foundLog }}" as="l" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:11px;padding:10px 15px;border-top:1px solid var(--divider)">
+              <div style="width:26px;height:26px;flex:none;border-radius:6px;background:{{ l.bg }}"></div>
+              <span style="flex:1;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.path }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted)">{{ l.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div onClick="{{ cancelScan }}" style="height:40px;display:inline-flex;align-items:center;padding:0 18px;border-radius:10px;background:var(--chip);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer">Cancel scan</div>
+      </sc-if>
+
+      <!-- ============ DONE PHASE ============ -->
+      <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+        <div style="width:52px;height:52px;border-radius:50%;background:var(--keep);display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;margin-bottom:20px">&#10003;</div>
+        <div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">Your library is ready</div>
+        <div style="font-size:14px;color:var(--sub);line-height:1.5;margin-bottom:26px">Indexed <span style="font-weight:600;color:var(--fg);font-family:ui-monospace,Menlo,monospace">48,210</span> photos across <span style="font-weight:600;color:var(--fg);font-family:ui-monospace,Menlo,monospace">1,043</span> folders. We also flagged <span style="font-weight:600;color:var(--fg);font-family:ui-monospace,Menlo,monospace">1,284</span> likely duplicates.</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px">
+          <sc-for list="{{ doneStats }}" as="st" hint-placeholder-count="4">
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px">
+              <div style="font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:7px">{{ st.k }}</div>
+              <div style="font-size:20px;font-weight:700;font-family:ui-monospace,Menlo,monospace">{{ st.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:12px">
+          <a href="Home.dc.html" style="height:46px;display:flex;align-items:center;padding:0 26px;border-radius:11px;background:var(--accent);color:var(--organize-fg);font-size:14px;font-weight:600">Open library &rarr;</a>
+          <a href="Duplicate%20Compare.dc.html" style="height:46px;display:flex;align-items:center;padding:0 22px;border-radius:11px;background:var(--chip);color:var(--fg);font-size:14px;font-weight:600">Review 1,284 duplicates</a>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    theme: (typeof localStorage !== 'undefined' && localStorage.getItem('aperture-theme')) || 'light',
+    phase: 'setup',
+    sources: [
+      { path: '/Users/jordan/Pictures', detail: 'Internal SSD', size: '182 GB', icon: '\u25a4', on: true },
+      { path: '/Volumes/Photos SSD', detail: 'External drive', size: '1.2 TB', icon: '\u2b1a', on: true },
+      { path: '/Users/jordan/Desktop/Imports', detail: 'Internal SSD', size: '24 GB', icon: '\u25a4', on: false },
+    ],
+    includeSub: true,
+    found: 0, folders: 0, dupes: 0,
+    curPath: '',
+    foundLog: [],
+  };
+  TARGET = 48210;
+  PATHS = [
+    ['/Volumes/Photos SSD/2024/Iceland Trip', '2,104'],
+    ['/Users/jordan/Pictures/2024/Summer', '3,890'],
+    ['/Volumes/Photos SSD/2023/Portugal', '4,512'],
+    ['/Users/jordan/Pictures/Lightroom Exports', '6,540'],
+    ['/Users/jordan/Desktop/Imports/Camera', '1,043'],
+    ['/Volumes/Photos SSD/2022/Wedding', '2,880'],
+    ['/Users/jordan/Pictures/iPhone Backup', '9,988'],
+    ['/Volumes/Photos SSD/Screenshots', '1,203'],
+  ];
+  BGS = ['linear-gradient(120deg,#6f9098,#547a82)','linear-gradient(120deg,#909b6d,#74804c)','linear-gradient(120deg,#b0968a,#977367)','linear-gradient(120deg,#7c8aa0,#5f6d87)','linear-gradient(120deg,#a68a84,#82635d)','linear-gradient(120deg,#8aa0a4,#688487)'];
+  paletteVars(dark){
+    const L = '--app-bg:#f4f4f6;--bar:#fff;--border:#e6e6e9;--fg:#26262b;--sub:#83838a;--muted:#a0a0a6;--chip:#ececee;--card:#fff;--divider:#ececee;--accent:oklch(0.6 0.09 250);--organize-fg:#fff;--cb-border:#cfcfd4;--seg-bg:#e4e4e7;--seg-active-bg:#fff;--seg-active-fg:#26262b;--keep:oklch(0.56 0.11 150)';
+    const D = '--app-bg:#0f0f11;--bar:#1c1c1f;--border:#29292e;--fg:#e7e7ea;--sub:#8a8a92;--muted:#77777f;--chip:#26262a;--card:#1a1a1d;--divider:#2a2a2f;--accent:oklch(0.68 0.1 250);--organize-fg:#0e0e12;--cb-border:#3d3d44;--seg-bg:#26262a;--seg-active-bg:#3a3a41;--seg-active-fg:#e7e7ea;--keep:oklch(0.62 0.12 150)';
+    return dark ? D : L;
+  }
+  toggleSource(i){ this.setState(s => { const a = s.sources.map((x, k) => k === i ? Object.assign({}, x, { on: !x.on }) : x); return { sources: a }; }); }
+  startScan(){
+    this.setState({ phase: 'scanning', found: 0, folders: 0, dupes: 0, foundLog: [] });
+    let tick = 0;
+    this._timer = setInterval(() => {
+      this.setState(s => {
+        const found = Math.min(this.TARGET, s.found + (300 + Math.floor(Math.random() * 1500)));
+        const folders = Math.round(found / 46.2);
+        const dupes = Math.min(1284, Math.round(found / 37.6));
+        const pi = tick % this.PATHS.length;
+        let log = s.foundLog;
+        if (tick % 3 === 0) {
+          const p = this.PATHS[pi];
+          log = [{ path: p[0], count: p[1] + ' photos', bg: this.BGS[pi % this.BGS.length] }].concat(s.foundLog).slice(0, 5);
+        }
+        if (found >= this.TARGET) { clearInterval(this._timer); return { found: this.TARGET, folders: 1043, dupes: 1284, phase: 'done', curPath: '', foundLog: log }; }
+        return { found, folders, dupes, curPath: this.PATHS[pi][0] + '/', foundLog: log };
+      });
+      tick++;
+    }, 130);
+  }
+  cancelScan(){ if (this._timer) clearInterval(this._timer); this.setState({ phase: 'setup' }); }
+  componentWillUnmount(){ if (this._timer) clearInterval(this._timer); }
+  renderVals(){
+    const dark = this.state.theme === 'dark';
+    const active = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--seg-active-bg);color:var(--seg-active-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const inactive = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--muted)';
+    const onCount = this.state.sources.filter(s => s.on).length;
+    const dataGB = (this.state.found * 4.4 / 1024).toFixed(1) + ' GB';
+    return {
+      rootStyle: this.paletteVars(dark) + ';display:flex;flex-direction:column;height:100vh;background:var(--app-bg);color:var(--fg);font-size:13px',
+      lightBtn: dark ? inactive : active,
+      darkBtn: dark ? active : inactive,
+      toggleTheme: () => this.setState(s => { const t = s.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('aperture-theme', t); } catch (e) {} return { theme: t }; }),
+      isSetup: this.state.phase === 'setup',
+      isScanning: this.state.phase === 'scanning',
+      isDone: this.state.phase === 'done',
+      sources: this.state.sources.map((s, i) => ({ path: s.path, detail: s.detail, size: s.size, icon: s.icon, onToggle: () => this.toggleSource(i), bd: s.on ? 'var(--accent)' : 'var(--border)', cbBg: s.on ? 'var(--accent)' : 'transparent', cbMark: s.on ? '\u2713' : '' })),
+      subTrack: this.state.includeSub ? 'var(--accent)' : 'var(--cb-border)',
+      subKnob: this.state.includeSub ? 'translateX(19px)' : 'translateX(0)',
+      toggleSub: () => this.setState(s => ({ includeSub: !s.includeSub })),
+      startScan: () => this.startScan(),
+      cancelScan: () => this.cancelScan(),
+      sourceSummary: onCount + ' of ' + this.state.sources.length + ' sources selected',
+      foundStr: this.state.found.toLocaleString('en-US'),
+      pct: Math.round(this.state.found / this.TARGET * 100),
+      curPath: this.state.curPath || 'Preparing\u2026',
+      scanStats: [
+        { k: 'Photos', v: this.state.found.toLocaleString('en-US') },
+        { k: 'Folders', v: this.state.folders.toLocaleString('en-US') },
+        { k: 'Duplicates', v: this.state.dupes.toLocaleString('en-US') },
+        { k: 'Data', v: dataGB },
+      ],
+      foundLog: this.state.foundLog,
+      doneStats: [
+        { k: 'Photos', v: '48,210' },
+        { k: 'Folders', v: '1,043' },
+        { k: 'Duplicates', v: '1,284' },
+        { k: 'Data', v: '214 GB' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

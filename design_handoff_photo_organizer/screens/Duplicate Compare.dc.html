@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#141416;font-family:'Helvetica Neue',Helvetica,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- top bar -->
+  <div style="height:58px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--bar);border-bottom:1px solid var(--border)">
+    <a href="Home.dc.html" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit"><div style="width:22px;height:22px;border-radius:6px;background:var(--accent)"></div><span style="font-weight:600">Aperture</span></a>
+    <div style="width:1px;height:22px;background:var(--border)"></div>
+    <a href="Home.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Home</a>
+    <a href="Library.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Library</a>
+    <a href="Duplicate%20Compare.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--fg);font-size:13px;font-weight:600;background:var(--chip)">Duplicates</a>
+    <a href="Organize.dc.html" style="padding:6px 11px;border-radius:8px;text-decoration:none;color:var(--sub);font-size:13px;font-weight:500">Organize</a>
+    <div style="flex:1;max-width:340px;margin:0 6px">
+      <div style="height:6px;border-radius:3px;background:var(--border);position:relative;overflow:hidden"><div style="position:absolute;left:0;top:0;height:6px;border-radius:3px;background:var(--accent);width:{{ progressPct }}%"></div></div>
+    </div>
+    <span style="font-size:12.5px;color:var(--sub);font-family:ui-monospace,Menlo,monospace">Pair {{ pairNum }} / 412</span>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;height:32px;border-radius:9px;background:var(--chip);font-size:12px;color:var(--sub)"><span style="color:var(--keep);font-weight:700">{{ cleaned }}</span> resolved &middot; <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--fg)">{{ freedStr }}</span> freed</div>
+    <div onClick="{{ prev }}" style="width:36px;height:36px;border-radius:9px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--sub);cursor:pointer">&#8592;</div>
+    <div onClick="{{ next }}" style="width:36px;height:36px;border-radius:9px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--sub);cursor:pointer">&#8594;</div>
+    <div onClick="{{ toggleTheme }}" style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;cursor:pointer;font-size:13px">
+      <span style="{{ lightBtn }}">&#9728;</span><span style="{{ darkBtn }}">&#9789;</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0;padding:22px;gap:0">
+    <!-- pane A -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div style="flex:1;border-radius:14px 0 0 14px;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);background:{{ a.bg }}">
+        <span style="position:absolute;top:14px;left:14px;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;background:{{ a.tagBg }};color:#fff">{{ a.tagIcon }} {{ a.tag }}</span>
+        <span style="position:absolute;bottom:14px;left:14px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(0,0,0,.45);color:#fff;font-family:ui-monospace,Menlo,monospace">A</span>
+      </div>
+      <div style="padding:14px 18px">
+        <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;margin-bottom:3px">{{ a.name }}</div>
+        <div style="font-size:12px;color:var(--sub)">{{ a.dims }} &middot; {{ a.format }} &middot; <span style="font-family:ui-monospace,Menlo,monospace">{{ a.folder }}</span></div>
+      </div>
+    </div>
+
+    <!-- center compare -->
+    <div style="width:240px;flex:none;display:flex;flex-direction:column;align-items:center;padding:8px 16px">
+      <div style="width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:6px;background:{{ simRing }}">
+        <div style="width:62px;height:62px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <span style="font-size:19px;font-weight:700;letter-spacing:-.02em">{{ similarity }}%</span>
+          <span style="font-size:9px;color:var(--muted);letter-spacing:.04em">MATCH</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:14px">{{ simLabel }}</div>
+      <div style="width:100%;background:var(--sidebar);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <div style="display:flex;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:var(--muted);padding:8px 12px 6px"><span style="flex:1">A</span><span style="flex:1;text-align:right">B</span></div>
+        <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="6">
+          <div style="padding:7px 12px;border-top:1px solid var(--divider);background:{{ d.rowBg }}">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">{{ d.label }}</div>
+            <div style="display:flex;font-size:11px;font-weight:500;gap:6px"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.a }}</span><span style="flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ d.bFg }}">{{ d.b }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- pane B -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div style="flex:1;border-radius:0 14px 14px 0;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);background:{{ b.bg }}">
+        <span style="position:absolute;top:14px;right:14px;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;background:{{ b.tagBg }};color:#fff">{{ b.tag }}</span>
+        <span style="position:absolute;bottom:14px;right:14px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(0,0,0,.45);color:#fff;font-family:ui-monospace,Menlo,monospace">B</span>
+      </div>
+      <div style="padding:14px 18px;text-align:right">
+        <div style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;margin-bottom:3px">{{ b.name }}</div>
+        <div style="font-size:12px;color:var(--sub)">{{ b.dims }} &middot; {{ b.format }} &middot; <span style="font-family:ui-monospace,Menlo,monospace">{{ b.folder }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- action footer -->
+  <div style="flex:none;height:70px;display:flex;align-items:center;gap:12px;padding:0 22px;background:var(--bar);border-top:1px solid var(--border)">
+    <div onClick="{{ keepA }}" style="height:40px;display:flex;align-items:center;gap:8px;padding:0 20px;border-radius:10px;background:var(--keep);color:#fff;font-size:13px;font-weight:600;cursor:pointer">&#9733; Keep A, delete B</div>
+    <div onClick="{{ keepB }}" style="height:40px;display:flex;align-items:center;padding:0 18px;border-radius:10px;background:var(--chip);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer">Keep B, delete A</div>
+    <div onClick="{{ keepBoth }}" style="height:40px;display:flex;align-items:center;padding:0 18px;border-radius:10px;background:var(--chip);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer">Keep both</div>
+    <div style="flex:1"></div>
+    <span style="font-size:12px;color:var(--sub)">Deleting <span style="font-weight:600;color:var(--fg)">B</span> reclaims <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">{{ b.size }}</span></span>
+    <div onClick="{{ keepA }}" style="height:40px;display:flex;align-items:center;padding:0 20px;border-radius:10px;background:var(--accent);color:var(--organize-fg);font-size:13px;font-weight:600;cursor:pointer">Confirm &rarr;</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: (typeof localStorage !== 'undefined' && localStorage.getItem('aperture-theme')) || 'light', reviewed: 23, cleaned: 0, freedMB: 0 };
+  PAIRS(){
+    return [
+      { sim: 98,  keeper: 'A',
+        a: { bg: 'linear-gradient(120deg,#c79a6a,#a87a4e)', name: 'IMG_4821.ARW', dims: '6000 × 4000', format: 'RAW (ARW)', size: '24.2 MB', mb: 24.2, folder: 'Iceland Trip', date: 'Jul 2 18:24', hash: 'a3f9…e21' },
+        b: { bg: 'linear-gradient(120deg,#cfa876,#b0824f)', name: 'IMG_4821.jpg', dims: '6000 × 4000', format: 'JPEG',      size: '8.1 MB',  mb: 8.1,  folder: 'LR Exports',   date: 'Jul 2 18:24', hash: 'a3f9…e21' } },
+      { sim: 95,  keeper: 'A',
+        a: { bg: 'linear-gradient(120deg,#6f8f72,#4f6d54)', name: 'DSC_1102.ARW', dims: '6000 × 4000', format: 'RAW (ARW)', size: '26.8 MB', mb: 26.8, folder: '2024/Summer', date: 'Jun 14 09:12', hash: '7b02…9c4' },
+        b: { bg: 'linear-gradient(120deg,#7f9a80,#5c7a60)', name: 'DSC_1102-edit.jpg', dims: '4000 × 2667', format: 'JPEG', size: '5.2 MB',  mb: 5.2,  folder: 'Edits',       date: 'Jun 14 09:12', hash: 'c1d8…4a0' } },
+      { sim: 100, keeper: 'A',
+        a: { bg: 'linear-gradient(120deg,#a68a84,#82635d)', name: 'P1090880.HEIC', dims: '4032 × 3024', format: 'HEIC', size: '3.1 MB', mb: 3.1, folder: 'iPhone 15 Pro', date: 'May 3 14:20', hash: 'e55c…107' },
+        b: { bg: 'linear-gradient(120deg,#a68a84,#82635d)', name: 'P1090880 (1).HEIC', dims: '4032 × 3024', format: 'HEIC', size: '3.1 MB', mb: 3.1, folder: 'iPhone Backup', date: 'May 3 14:20', hash: 'e55c…107' } },
+      { sim: 97,  keeper: 'A',
+        a: { bg: 'linear-gradient(125deg,#5f6d87,#3a4560)', name: 'night_01.jpg', dims: '5472 × 3648', format: 'JPEG', size: '9.4 MB', mb: 9.4, folder: 'Camera Imports', date: 'Mar 2 21:40', hash: '2fa1…8d3' },
+        b: { bg: 'linear-gradient(125deg,#6a7896,#45527200)', name: 'night_01_small.jpg', dims: '2048 × 1365', format: 'JPEG', size: '1.1 MB', mb: 1.1, folder: 'Screenshots', date: 'Mar 2 21:40', hash: 'b904…5e7' } },
+      { sim: 99,  keeper: 'A',
+        a: { bg: 'linear-gradient(120deg,#b3b9c2,#9199a4)', name: 'IMG_7731.ARW', dims: '6000 × 4000', format: 'RAW (ARW)', size: '25.0 MB', mb: 25.0, folder: '2023', date: 'Dec 20 11:05', hash: '0ac7…f12' },
+        b: { bg: 'linear-gradient(120deg,#bcc2ca,#9aa2ad)', name: 'IMG_7731.dng', dims: '6000 × 4000', format: 'DNG', size: '23.8 MB', mb: 23.8, folder: 'LR Exports', date: 'Dec 20 11:05', hash: '0ac7…f12' } },
+      { sim: 100, keeper: 'A',
+        a: { bg: 'linear-gradient(120deg,#6f9098,#4f767e)', name: 'boats.tif', dims: '4500 × 3000', format: 'TIFF', size: '38.6 MB', mb: 38.6, folder: 'Scans', date: 'Aug 9 16:33', hash: 'd7e3…b88' },
+        b: { bg: 'linear-gradient(120deg,#79999f,#57808700)', name: 'boats.jpg', dims: '4500 × 3000', format: 'JPEG', size: '6.7 MB', mb: 6.7, folder: 'Exports', date: 'Aug 9 16:33', hash: 'd7e3…b88' } },
+    ];
+  }
+  paletteVars(dark){
+    const L = '--app-bg:#fbfbfc;--bar:#fff;--border:#e6e6e9;--fg:#26262b;--sub:#83838a;--muted:#a0a0a6;--sidebar:#f6f6f8;--chip:#f1f1f3;--card:#fff;--divider:#efeff1;--accent:oklch(0.6 0.09 250);--organize-fg:#fff;--seg-bg:#ececed;--seg-active-bg:#fff;--seg-active-fg:#26262b;--keep:oklch(0.56 0.11 150);--danger:oklch(0.55 0.16 25);--diff-bg:oklch(0.97 0.02 25);--diff-fg:oklch(0.5 0.14 25)';
+    const D = '--app-bg:#141416;--bar:#1c1c1f;--border:#29292e;--fg:#e7e7ea;--sub:#8a8a92;--muted:#77777f;--sidebar:#1a1a1d;--chip:#26262a;--card:#202024;--divider:#26262b;--accent:oklch(0.68 0.1 250);--organize-fg:#0e0e12;--seg-bg:#26262a;--seg-active-bg:#3a3a41;--seg-active-fg:#e7e7ea;--keep:oklch(0.62 0.12 150);--danger:oklch(0.62 0.15 25);--diff-bg:oklch(0.28 0.05 25);--diff-fg:oklch(0.74 0.13 25)';
+    return dark ? D : L;
+  }
+  cur(){ const p = this.PAIRS(); return p[this.state.reviewed % p.length]; }
+  diffRows(pair){
+    const rows = [
+      ['Dimensions', pair.a.dims, pair.b.dims],
+      ['File size', pair.a.size, pair.b.size],
+      ['Format', pair.a.format, pair.b.format],
+      ['Captured', pair.a.date, pair.b.date],
+      ['SHA-256', pair.a.hash, pair.b.hash],
+      ['Folder', pair.a.folder, pair.b.folder],
+    ];
+    return rows.map(r => {
+      const diff = r[1] !== r[2];
+      return { label: r[0], a: r[1], b: r[2], rowBg: diff ? 'var(--diff-bg)' : 'transparent', bFg: diff ? 'var(--diff-fg)' : 'var(--fg)' };
+    });
+  }
+  simLabel(s){ return s >= 100 ? 'pixel-identical' : (s >= 98 ? 'visually similar' : 'similar crop / edit'); }
+  fmt(mb){ return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB'; }
+  advance(d){ this.setState(s => ({ reviewed: Math.max(0, Math.min(411, s.reviewed + d)) })); }
+  decide(which){
+    this.setState(s => {
+      const p = this.PAIRS(); const pair = p[s.reviewed % p.length];
+      const add = which === 'A' ? pair.b.mb : (which === 'B' ? pair.a.mb : 0);
+      const cl = which === 'both' ? 0 : 1;
+      return { reviewed: Math.min(411, s.reviewed + 1), cleaned: s.cleaned + cl, freedMB: s.freedMB + add };
+    });
+  }
+  renderVals(){
+    const dark = this.state.theme === 'dark';
+    const active = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--seg-active-bg);color:var(--seg-active-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const inactive = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--muted)';
+    const pair = this.cur();
+    const a = Object.assign({}, pair.a, { tag: 'Suggested keeper', tagIcon: '\u2605', tagBg: 'var(--keep)' });
+    const b = Object.assign({}, pair.b, { tag: 'Duplicate', tagBg: 'var(--danger)' });
+    return {
+      rootStyle: this.paletteVars(dark) + ';display:flex;flex-direction:column;height:100vh;background:var(--app-bg);color:var(--fg);font-size:13px',
+      lightBtn: dark ? inactive : active,
+      darkBtn: dark ? active : inactive,
+      toggleTheme: () => this.setState(s => { const t = s.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('aperture-theme', t); } catch (e) {} return { theme: t }; }),
+      a, b,
+      similarity: pair.sim,
+      simLabel: this.simLabel(pair.sim),
+      simRing: 'conic-gradient(var(--keep) 0% ' + pair.sim + '%, var(--border) ' + pair.sim + '% 100%)',
+      diffRows: this.diffRows(pair),
+      pairNum: this.state.reviewed + 1,
+      progressPct: ((this.state.reviewed / 412) * 100).toFixed(1),
+      cleaned: this.state.cleaned,
+      freedStr: this.fmt(this.state.freedMB),
+      keepA: () => this.decide('A'),
+      keepB: () => this.decide('B'),
+      keepBoth: () => this.decide('both'),
+      next: () => this.advance(1),
+      prev: () => this.advance(-1),
+    };
+  }
+}
+</script>
+</body>
+</html>

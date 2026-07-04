@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#141416;font-family:'Helvetica Neue',Helvetica,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- top bar -->
+  <div style="height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--bar);border-bottom:1px solid var(--border)">
+    <a href="Home.dc.html" style="display:flex;align-items:center;gap:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--accent)"></div><span style="font-weight:600;letter-spacing:-.01em">Aperture</span></a>
+    <div style="width:1px;height:22px;background:var(--border);margin:0 2px"></div>
+    <a href="Home.dc.html" style="padding:6px 11px;border-radius:8px;color:var(--fg);font-size:13px;font-weight:600;background:var(--chip)">Home</a>
+    <a href="Library.dc.html" style="padding:6px 11px;border-radius:8px;color:var(--sub);font-size:13px;font-weight:500">Library</a>
+    <a href="Duplicate%20Compare.dc.html" style="padding:6px 11px;border-radius:8px;color:var(--sub);font-size:13px;font-weight:500">Duplicates</a>
+    <a href="Organize.dc.html" style="padding:6px 11px;border-radius:8px;color:var(--sub);font-size:13px;font-weight:500">Organize</a>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:var(--chip);border-radius:8px;color:var(--muted);width:260px"><span style="font-size:13px">&#9906;</span><span style="font-size:12.5px">Search 48,210 photos&hellip;</span></div>
+    <div onClick="{{ toggleTheme }}" style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;cursor:pointer;font-size:13px">
+      <span style="{{ lightBtn }}">&#9728;</span><span style="{{ darkBtn }}">&#9789;</span>
+    </div>
+    <div style="width:30px;height:30px;border-radius:50%;background:oklch(0.58 0.08 30);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">JD</div>
+  </div>
+
+  <div style="flex:1;overflow:auto">
+    <div style="max-width:1180px;margin:0 auto;padding:36px 40px 48px">
+
+      <!-- greeting + stats -->
+      <div style="font-size:13px;color:var(--sub);margin-bottom:5px">Good afternoon, Jordan</div>
+      <div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:22px">Your library</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px">
+        <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px">
+            <div style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">{{ s.label }}</div>
+            <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;font-family:ui-monospace,Menlo,monospace">{{ s.value }}</div>
+            <div style="font-size:12px;color:var(--sub);margin-top:4px">{{ s.sub }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- entry cards -->
+      <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Jump back in</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:34px">
+
+        <!-- library -->
+        <a href="Library.dc.html" style="display:block;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:14px 14px 0">
+            <sc-for list="{{ mosaic }}" as="t" hint-placeholder-count="6">
+              <div style="aspect-ratio:1;border-radius:5px;background:{{ t.bg }}"></div>
+            </sc-for>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:16px;font-weight:600">Browse library</span><span style="margin-left:auto;color:var(--muted);font-size:16px">&rarr;</span></div>
+            <div style="font-size:12.5px;color:var(--sub)">Folders, filters &amp; full-screen viewer</div>
+            <div style="font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-top:9px">48,210 photos &middot; 1,043 folders</div>
+          </div>
+        </a>
+
+        <!-- duplicates (emphasized) -->
+        <a href="Duplicate%20Compare.dc.html" style="display:block;background:var(--card);border:1.5px solid var(--accent);border-radius:16px;overflow:hidden;box-shadow:0 4px 16px {{ accentShadow }}">
+          <div style="height:112px;position:relative;background:{{ dupGrad }};display:flex;align-items:center;justify-content:center">
+            <div style="position:relative;width:66px;height:66px">
+              <div style="position:absolute;inset:0;border-radius:9px;background:rgba(255,255,255,.9);transform:rotate(-7deg);box-shadow:0 2px 8px rgba(0,0,0,.2)"></div>
+              <div style="position:absolute;inset:0;border-radius:9px;background:rgba(255,255,255,.7);transform:rotate(5deg)"></div>
+              <div style="position:absolute;inset:0;border-radius:9px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:22px;color:oklch(0.55 0.16 25);font-weight:700">&#8801;</div>
+            </div>
+            <span style="position:absolute;top:12px;right:12px;padding:4px 10px;border-radius:7px;background:rgba(20,20,22,.75);color:#fff;font-size:11px;font-weight:700;font-family:ui-monospace,Menlo,monospace">6.8 GB free</span>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:16px;font-weight:600">Review duplicates</span><span style="margin-left:auto;color:var(--accent);font-size:16px">&rarr;</span></div>
+            <div style="font-size:12.5px;color:var(--sub)">Compare matches side-by-side, keep the best</div>
+            <div style="font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-top:9px">1,284 duplicates &middot; 412 groups</div>
+          </div>
+        </a>
+
+        <!-- organize -->
+        <a href="Organize.dc.html" style="display:block;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+          <div style="height:112px;padding:14px;display:flex;flex-direction:column;justify-content:center;gap:8px">
+            <sc-for list="{{ working }}" as="w" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--chip);border-radius:9px">
+                <div style="width:26px;height:26px;border-radius:6px;background:{{ w.bg }}"></div>
+                <span style="font-size:12.5px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.name }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">{{ w.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:16px 18px 18px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:16px;font-weight:600">Organize folders</span><span style="margin-left:auto;color:var(--muted);font-size:16px">&rarr;</span></div>
+            <div style="font-size:12.5px;color:var(--sub)">Move, tag &amp; sort your working set</div>
+            <div style="font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-top:9px">2 folders selected &middot; 5,994 photos</div>
+          </div>
+        </a>
+      </div>
+
+      <!-- recent -->
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+        <span style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Recent imports</span>
+        <a href="Library.dc.html" style="font-size:12px;color:var(--accent);font-weight:600;margin-left:auto">View all &rarr;</a>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px">
+        <sc-for list="{{ recent }}" as="t" hint-placeholder-count="16">
+          <a href="Library.dc.html" style="display:block;position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:{{ t.bg }};box-shadow:0 1px 2px rgba(0,0,0,.12)">
+            <sc-if value="{{ t.raw }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:5px;left:5px;font-family:ui-monospace,Menlo,monospace;font-size:8px;font-weight:700;color:#fff;background:rgba(0,0,0,.45);padding:1px 4px;border-radius:3px">RAW</span></sc-if>
+          </a>
+        </sc-for>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: (typeof localStorage !== 'undefined' && localStorage.getItem('aperture-theme')) || 'light' };
+  rng(seed){ let r = seed >>> 0; return () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; }; }
+  makeThumbs(n, seed){
+    const pals = [['#8f9c8a','#71806c'],['#b6a389','#9c8468'],['#7c8aa0','#5f6d87'],['#a68a84','#8c6f69'],['#9a9488','#7e786b'],['#6f9098','#547a82'],['#ada2b0','#8f8296'],['#909b6d','#74804c'],['#a0876f','#856a52'],['#7f9488','#5f766a'],['#b0968a','#977367'],['#8aa0a4','#688487']];
+    const rand = this.rng(seed); const a = [];
+    for (let i = 0; i < n; i++) {
+      const p = pals[Math.floor(rand() * pals.length)];
+      const ang = 20 + Math.floor(rand() * 140);
+      a.push({ bg: 'linear-gradient(' + ang + 'deg, ' + p[0] + ', ' + p[1] + ')', raw: rand() > 0.82 });
+    }
+    return a;
+  }
+  paletteVars(dark){
+    const L = '--app-bg:#f4f4f6;--bar:#fff;--border:#e6e6e9;--fg:#26262b;--sub:#83838a;--muted:#a0a0a6;--chip:#f1f1f3;--card:#fff;--accent:oklch(0.6 0.09 250);--seg-bg:#ececed;--seg-active-bg:#fff;--seg-active-fg:#26262b';
+    const D = '--app-bg:#0f0f11;--bar:#1c1c1f;--border:#29292e;--fg:#e7e7ea;--sub:#8a8a92;--muted:#77777f;--chip:#26262a;--card:#1a1a1d;--accent:oklch(0.68 0.1 250);--seg-bg:#26262a;--seg-active-bg:#3a3a41;--seg-active-fg:#e7e7ea';
+    return dark ? D : L;
+  }
+  renderVals(){
+    const dark = this.state.theme === 'dark';
+    const active = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--seg-active-bg);color:var(--seg-active-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const inactive = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--muted)';
+    return {
+      rootStyle: this.paletteVars(dark) + ';display:flex;flex-direction:column;height:100vh;background:var(--app-bg);color:var(--fg);font-size:13px',
+      lightBtn: dark ? inactive : active,
+      darkBtn: dark ? active : inactive,
+      accentShadow: dark ? 'rgba(90,130,220,.18)' : 'rgba(79,111,156,.16)',
+      dupGrad: dark ? 'linear-gradient(120deg,#2a3550,#1e2740)' : 'linear-gradient(120deg,#dfe6f2,#c7d3ea)',
+      toggleTheme: () => this.setState(s => { const t = s.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('aperture-theme', t); } catch (e) {} return { theme: t }; }),
+      stats: [
+        { label: 'Photos', value: '48,210', sub: 'across 1,043 folders' },
+        { label: 'Storage', value: '214 GB', sub: 'on 2 drives' },
+        { label: 'Duplicates', value: '1,284', sub: '6.8 GB reclaimable' },
+        { label: 'Untagged', value: '9,120', sub: 'need a home' },
+      ],
+      mosaic: this.makeThumbs(6, 9),
+      working: [
+        { name: 'Iceland Trip', count: '2,104', bg: 'linear-gradient(120deg,#6f9098,#547a82)' },
+        { name: 'Summer', count: '3,890', bg: 'linear-gradient(120deg,#909b6d,#74804c)' },
+      ],
+      recent: this.makeThumbs(16, 3),
+    };
+  }
+}
+</script>
+</body>
+</html>

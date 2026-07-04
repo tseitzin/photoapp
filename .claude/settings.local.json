@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof -nP -iTCP:8003 -sTCP:LISTEN)",
+      "Bash(echo \"---8003 status: $?\")",
+      "Bash(lsof -nP -iTCP:5432 -sTCP:LISTEN)",
+      "Bash(echo \"---5432 status: $?\")",
+      "Bash(lsof -nP -iTCP:5173 -sTCP:LISTEN)",
+      "Bash(docker --version)"
+    ]
+  }
+}

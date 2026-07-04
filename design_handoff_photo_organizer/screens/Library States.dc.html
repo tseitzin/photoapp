@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#141416;font-family:'Helvetica Neue',Helvetica,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
+@keyframes apShim{0%{background-position:100% 0}100%{background-position:-100% 0}}
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- top bar -->
+  <div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--bar);border-bottom:1px solid var(--border)">
+    <a href="Home.dc.html" style="display:flex;align-items:center;gap:9px"><div style="width:22px;height:22px;border-radius:6px;background:var(--accent)"></div><span style="font-weight:600">Aperture</span></a>
+    <div style="width:1px;height:22px;background:var(--border)"></div>
+    <a href="Library.dc.html" style="padding:6px 11px;border-radius:8px;color:var(--sub);font-size:13px;font-weight:500">Library</a>
+    <div style="flex:1"></div>
+    <span style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)">Preview state</span>
+    <div style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;font-size:12px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+        <span onClick="{{ v.onClick }}" style="padding:5px 11px;border-radius:6px;cursor:pointer;background:{{ v.bg }};color:{{ v.fg }};font-weight:{{ v.weight }};box-shadow:{{ v.shadow }}">{{ v.label }}</span>
+      </sc-for>
+    </div>
+    <div onClick="{{ toggleTheme }}" style="display:flex;background:var(--seg-bg);border-radius:8px;padding:2px;gap:2px;cursor:pointer;font-size:13px">
+      <span style="{{ lightBtn }}">&#9728;</span><span style="{{ darkBtn }}">&#9789;</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- sidebar (static) -->
+    <div style="width:266px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);border-right:1px solid var(--border)">
+      <div style="padding:14px 18px 8px;font-size:10.5px;font-weight:600;letter-spacing:.08em;color:var(--muted)">LIBRARY</div>
+      <div style="flex:1;overflow:hidden;padding:0 10px">
+        <sc-for list="{{ tree }}" as="row" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;padding-left:{{ row.pad }}px;border-radius:7px">
+            <span style="width:12px;color:var(--muted);font-size:9px;text-align:center">{{ row.chev }}</span>
+            <span style="width:12px;height:10px;flex:none;border-radius:2px;background:var(--folder)"></span>
+            <span style="flex:1;font-weight:{{ row.weight }};opacity:{{ dimSide }}">{{ row.name }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);opacity:{{ dimSide }}">{{ row.count }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- center -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:var(--grid-bg)">
+      <div style="height:46px;flex:none;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--bar);border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--sub)">Pictures</span><span style="color:var(--muted)">/</span>
+        <span style="font-size:13px;font-weight:600">All photos</span>
+        <div style="flex:1"></div>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)">{{ headCount }}</span>
+      </div>
+
+      <!-- LOADING -->
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;overflow:hidden;padding:16px 18px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:96px;height:13px;border-radius:4px;background:linear-gradient(90deg,var(--skl) 25%,var(--skl2) 37%,var(--skl) 63%);background-size:400% 100%;animation:apShim 1.4s ease infinite"></div>
+            <div style="width:52px;height:11px;border-radius:4px;background:var(--skl)"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px">
+            <sc-for list="{{ skels }}" as="k" hint-placeholder-count="18">
+              <div style="aspect-ratio:1;border-radius:4px;background:linear-gradient(90deg,var(--skl) 25%,var(--skl2) 37%,var(--skl) 63%);background-size:400% 100%;animation:apShim 1.4s ease infinite;animation-delay:{{ k.delay }}"></div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- EMPTY -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px">
+          <div style="width:132px;height:104px;border-radius:14px;border:1px solid var(--border);background:repeating-linear-gradient(45deg,var(--chip),var(--chip) 9px,var(--card) 9px,var(--card) 18px);display:flex;align-items:center;justify-content:center;margin-bottom:24px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">no photos</span></div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.01em;margin-bottom:7px">No photos indexed yet</div>
+          <div style="font-size:13.5px;color:var(--sub);max-width:380px;line-height:1.5;margin-bottom:22px">Point Aperture at the drives and folders where your photos live, and it&rsquo;ll build your library.</div>
+          <div style="display:flex;gap:11px">
+            <a href="Scan.dc.html" style="height:42px;display:flex;align-items:center;padding:0 22px;border-radius:11px;background:var(--accent);color:var(--organize-fg);font-size:13.5px;font-weight:600">Run a scan</a>
+            <a href="Scan.dc.html" style="height:42px;display:flex;align-items:center;padding:0 20px;border-radius:11px;background:var(--chip);color:var(--fg);font-size:13.5px;font-weight:600">Add folders</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- NO RESULTS -->
+      <sc-if value="{{ isNoResults }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--muted);margin-bottom:22px">&#9906;</div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.01em;margin-bottom:7px">No photos match these filters</div>
+          <div style="font-size:13.5px;color:var(--sub);max-width:400px;line-height:1.5;margin-bottom:18px">Try loosening a filter &mdash; there are 48,210 photos in your library.</div>
+          <div style="display:flex;gap:8px;margin-bottom:22px">
+            <span style="height:28px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:8px;font-size:12px;font-weight:600;background:var(--chip-on-bg);color:var(--chip-on-fg)">RAW &times;</span>
+            <span style="height:28px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:8px;font-size:12px;font-weight:600;background:var(--chip-on-bg);color:var(--chip-on-fg)">Canon R6 &times;</span>
+            <span style="height:28px;display:flex;align-items:center;gap:6px;padding:0 11px;border-radius:8px;font-size:12px;font-weight:600;background:var(--chip-on-bg);color:var(--chip-on-fg)">&#9733;&#9733;&#9733;+ &times;</span>
+          </div>
+          <div style="height:42px;display:flex;align-items:center;padding:0 22px;border-radius:11px;background:var(--accent);color:var(--organize-fg);font-size:13.5px;font-weight:600;cursor:pointer">Clear all filters</div>
+        </div>
+      </sc-if>
+
+      <!-- ERROR -->
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--danger-soft);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:var(--danger);margin-bottom:22px">!</div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.01em;margin-bottom:7px">Can&rsquo;t reach the library service</div>
+          <div style="font-size:13.5px;color:var(--sub);max-width:400px;line-height:1.5;margin-bottom:8px">The Aperture backend isn&rsquo;t responding. Your photos are safe &mdash; nothing was changed.</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted);background:var(--chip);padding:6px 11px;border-radius:7px;margin-bottom:22px">ECONNREFUSED &middot; localhost:8787</div>
+          <div style="display:flex;gap:11px">
+            <div style="height:42px;display:flex;align-items:center;padding:0 22px;border-radius:11px;background:var(--accent);color:var(--organize-fg);font-size:13.5px;font-weight:600;cursor:pointer">Retry</div>
+            <div style="height:42px;display:flex;align-items:center;padding:0 20px;border-radius:11px;background:var(--chip);color:var(--fg);font-size:13.5px;font-weight:600;cursor:pointer">Troubleshoot</div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: (typeof localStorage !== 'undefined' && localStorage.getItem('aperture-theme')) || 'light', view: 'loading' };
+  paletteVars(dark){
+    const L = '--app-bg:#fbfbfc;--bar:#fff;--border:#e6e6e9;--fg:#26262b;--sub:#83838a;--muted:#a0a0a6;--sidebar:#f6f6f8;--grid-bg:#f2f2f4;--chip:#f1f1f3;--card:#fff;--accent:oklch(0.6 0.09 250);--organize-fg:#fff;--folder:oklch(0.78 0.05 90);--seg-bg:#ececed;--seg-active-bg:#fff;--seg-active-fg:#26262b;--skl:#e7e7ea;--skl2:#f2f2f4;--chip-on-bg:oklch(0.94 0.03 250);--chip-on-fg:oklch(0.42 0.09 250);--danger:oklch(0.55 0.16 25);--danger-soft:oklch(0.95 0.04 25)';
+    const D = '--app-bg:#141416;--bar:#1c1c1f;--border:#29292e;--fg:#e7e7ea;--sub:#8a8a92;--muted:#77777f;--sidebar:#1a1a1d;--grid-bg:#111113;--chip:#26262a;--card:#202024;--accent:oklch(0.68 0.1 250);--organize-fg:#0e0e12;--folder:oklch(0.62 0.05 90);--seg-bg:#26262a;--seg-active-bg:#3a3a41;--seg-active-fg:#e7e7ea;--skl:#242428;--skl2:#2e2e34;--chip-on-bg:oklch(0.32 0.06 250);--chip-on-fg:oklch(0.86 0.06 250);--danger:oklch(0.64 0.16 25);--danger-soft:oklch(0.28 0.06 25)';
+    return dark ? D : L;
+  }
+  tree(){
+    const raw = [['Pictures','48,210',0,'\u25be',600],['2024','12,847',1,'\u25be',400],['Iceland Trip','2,104',2,'',400],['Summer','3,890',2,'',400],['2023','18,332',1,'\u25b8',400],['iPhone Backup','9,988',1,'\u25b8',400]];
+    return raw.map(r => ({ name: r[0], count: r[1], pad: 12 + r[2] * 18, chev: r[3], weight: r[4] }));
+  }
+  renderVals(){
+    const dark = this.state.theme === 'dark';
+    const active = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--seg-active-bg);color:var(--seg-active-fg);box-shadow:0 1px 2px rgba(0,0,0,.12)';
+    const inactive = 'width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--muted)';
+    const v = this.state.view;
+    const defs = [['loading','Loading'],['empty','Empty'],['noresults','No results'],['error','Error']];
+    const headCount = v === 'loading' ? '\u2026' : (v === 'noresults' ? '0 of 48,210' : (v === 'empty' ? '0 photos' : '\u2014'));
+    return {
+      rootStyle: this.paletteVars(dark) + ';display:flex;flex-direction:column;height:100vh;background:var(--app-bg);color:var(--fg);font-size:13px',
+      lightBtn: dark ? inactive : active,
+      darkBtn: dark ? active : inactive,
+      toggleTheme: () => this.setState(s => { const t = s.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('aperture-theme', t); } catch (e) {} return { theme: t }; }),
+      views: defs.map(d => {
+        const on = v === d[0];
+        return { label: d[1], onClick: () => this.setState({ view: d[0] }), bg: on ? 'var(--seg-active-bg)' : 'transparent', fg: on ? 'var(--seg-active-fg)' : 'var(--sub)', weight: on ? 600 : 500, shadow: on ? '0 1px 2px rgba(0,0,0,.09)' : 'none' };
+      }),
+      tree: this.tree(),
+      dimSide: v === 'error' ? '0.4' : '1',
+      headCount,
+      isLoading: v === 'loading',
+      isEmpty: v === 'empty',
+      isNoResults: v === 'noresults',
+      isError: v === 'error',
+      skels: Array.from({ length: 18 }, (_, i) => ({ delay: ((i % 6) * 0.12).toFixed(2) + 's' })),
+    };
+  }
+}
+</script>
+</body>
+</html>
