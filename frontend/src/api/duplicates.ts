@@ -73,3 +73,8 @@ export function dismissGroup(groupId: number): Promise<DuplicateGroup> {
 export function getDuplicateSummary(): Promise<DuplicateSummary> {
   return request<DuplicateSummary>('/api/duplicates/summary')
 }
+
+/** Active photos the user marked 'remove' — the quarantine work-list. */
+export function listMarkedForRemoval(): Promise<PhotoRead[]> {
+  return request<PhotoRead[]>('/api/duplicates/marked')
+}

@@ -86,14 +86,22 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
 - [x] Frontend tests: 8 review-flow store tests (queue, decisions, keeper switch,
       error path). Live-verified end to end incl. decision → reviewed → summary.
 
-## Phase 6 — Safe file management
+## Phase 6 — Safe file management ✅ (2026-07-04)
 
-- [ ] **PR 6.1 — safety core**: path validation (realpath containment), quarantine +
-      restore operations, file_operations audit log, exhaustive tests incl.
-      traversal/symlink-escape attempts (BEFORE any UI)
-- [ ] **PR 6.2 — removal UI**: confirmation flow with full file details + preview,
-      whole-group-removal strong warning, quarantine browser + restore, audit view
-- [ ] **PR 6.3 — permanent delete**: explicit quarantine-only purge + tests
+- [x] **PR 6.1 — safety core**: resolved-path containment validation, quarantine
+      (mirror absolute path under QUARANTINE_DIR, never overwrite), restore,
+      permanent delete (confirm=true, quarantined-only, target revalidated),
+      append-only file_operations audit, whole-group-wipe 409 guard with force,
+      GET /api/duplicates/marked; 17 safety tests incl. traversal, symlink escape,
+      and tampered-audit-row attacks. *Permanent-delete backend landed here
+      (originally PR 6.3) — it is the same safety surface and test suite.*
+- [x] **PR 6.2 — removal + delete UI**: /quarantine page (marked-for-removal list
+      with confirm dialog, force strong-warning dialog on 409, quarantine browser
+      with restore, permanent delete behind type-DELETE confirmation, audit
+      history), link from Duplicates; ConfirmDialog component. 9 vitest tests
+      (force flow, confirm gating, dialog behavior). Live-verified full lifecycle:
+      mark → refuse wipe → quarantine → restore → delete → audit.
+- [x] **PR 6.3** — merged into 6.1 (backend) and 6.2 (UI); see above.
 
 ## Phase 7 — Deferred / future
 

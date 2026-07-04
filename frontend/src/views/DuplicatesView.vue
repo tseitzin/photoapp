@@ -27,7 +27,8 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
         <p v-if="store.summary" class="sub">
           {{ formatCount(store.summary.pending_groups) }} groups to review ·
           {{ formatCount(store.summary.marked_remove_count) }} photos marked ·
-          {{ formatBytes(store.summary.marked_remove_bytes) }} to reclaim
+          {{ formatBytes(store.summary.marked_remove_bytes) }} to reclaim ·
+          <RouterLink to="/quarantine" class="link">apply removals →</RouterLink>
         </p>
       </div>
       <div class="segmented" role="group" aria-label="Kind">
@@ -141,6 +142,12 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
   margin: 0;
   font-size: 12.5px;
   color: var(--sub);
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
 }
 
 .segmented {
