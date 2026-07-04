@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
+import { useLibraryStore } from '@/stores/library'
 import { useThemeStore } from '@/stores/theme'
+import { formatCount } from '@/utils/format'
+import type { GroupBy } from '@/utils/grouping'
 
 const themeStore = useThemeStore()
+const libraryStore = useLibraryStore()
+const route = useRoute()
+
+const onLibrary = computed(() => route.name === 'library')
 
 const navItems = [
   { label: 'Home', to: '/' },
@@ -10,6 +18,20 @@ const navItems = [
   { label: 'Duplicates', to: '/duplicates' },
   { label: 'Organize', to: '/organize' },
 ] as const
+
+const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
+  { value: 'folder', label: 'Folders' },
+  { value: 'date', label: 'Date' },
+  { value: 'camera', label: 'Camera' },
+]
+
+const searchInput = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+function onSearchInput(): void {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void libraryStore.setSearch(searchInput.value.trim()), 300)
+}
 </script>
 
 <template>
@@ -31,7 +53,28 @@ const navItems = [
         {{ item.label }}
       </RouterLink>
     </nav>
+    <input
+      v-if="onLibrary"
+      v-model="searchInput"
+      class="search"
+      type="search"
+      :placeholder="`Search ${formatCount(libraryStore.total)} photos…`"
+      aria-label="Search photos by filename"
+      @input="onSearchInput"
+    />
     <span class="spacer" />
+    <div v-if="onLibrary" class="segmented" role="group" aria-label="Group by">
+      <button
+        v-for="option in GROUP_OPTIONS"
+        :key="option.value"
+        type="button"
+        class="seg-btn"
+        :class="{ 'seg-btn--active': libraryStore.groupBy === option.value }"
+        @click="libraryStore.setGroupBy(option.value)"
+      >
+        {{ option.label }}
+      </button>
+    </div>
     <div
       class="theme-toggle"
       role="group"
@@ -124,6 +167,49 @@ const navItems = [
 
 .spacer {
   flex: 1;
+}
+
+.search {
+  flex: 1;
+  max-width: 440px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--chip);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+.search::placeholder {
+  color: var(--muted);
+}
+
+.segmented {
+  display: flex;
+  background: var(--seg-bg);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  font-size: 12.5px;
+}
+
+.seg-btn {
+  border: 0;
+  padding: 5px 13px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sub);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.seg-btn--active {
+  background: var(--seg-active-bg);
+  color: var(--seg-active-fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .theme-toggle {

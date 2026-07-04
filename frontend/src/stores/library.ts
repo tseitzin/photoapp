@@ -35,6 +35,8 @@ export const useLibraryStore = defineStore('library', () => {
   const expanded = ref(new Set<string>())
   const checkedFolders = ref(new Set<string>())
   const selectedPhotoId = ref<number | null>(null)
+  const lightboxOpen = ref(false)
+  const lightboxIndex = ref(0)
 
   const hasMore = computed(() => photos.value.length < total.value)
   const sections = computed(() => groupPhotos(photos.value, groupBy.value))
@@ -169,6 +171,29 @@ export const useLibraryStore = defineStore('library', () => {
     selectedPhotoId.value = id
   }
 
+  const lightboxPhoto = computed(() => photos.value[lightboxIndex.value] ?? null)
+
+  function openLightbox(photoId: number): void {
+    const index = photos.value.findIndex((p) => p.id === photoId)
+    if (index === -1) return
+    lightboxIndex.value = index
+    selectedPhotoId.value = photoId
+    lightboxOpen.value = true
+  }
+
+  function closeLightbox(): void {
+    lightboxOpen.value = false
+  }
+
+  function lightboxStep(delta: 1 | -1): void {
+    const next = lightboxIndex.value + delta
+    if (next < 0 || next >= photos.value.length) return
+    lightboxIndex.value = next
+    selectedPhotoId.value = photos.value[next]!.id
+    // Keep the runway ahead of the user when paging forward.
+    if (delta === 1 && photos.value.length - next < 20) void loadMore()
+  }
+
   return {
     photos,
     total,
@@ -186,6 +211,12 @@ export const useLibraryStore = defineStore('library', () => {
     checkedTotals,
     selectedPhotoId,
     selectedPhoto,
+    lightboxOpen,
+    lightboxIndex,
+    lightboxPhoto,
+    openLightbox,
+    closeLightbox,
+    lightboxStep,
     hasMore,
     sections,
     hasActiveFilters,

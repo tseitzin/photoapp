@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import type { PhotoSort } from '@/api/photos'
+import FilterPanel from '@/components/library/FilterPanel.vue'
 import FolderTree from '@/components/library/FolderTree.vue'
 import PhotoGrid from '@/components/library/PhotoGrid.vue'
+import PhotoLightbox from '@/components/library/PhotoLightbox.vue'
 import { useLibraryStore } from '@/stores/library'
 import { formatCount } from '@/utils/format'
 
@@ -62,14 +64,23 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
           <code class="error-detail">{{ store.error }}</code>
           <button type="button" class="retry" @click="store.reload()">Retry</button>
         </div>
+        <div v-else-if="store.total === 0 && store.hasActiveFilters" class="state">
+          <p class="state-title">No photos match these filters</p>
+          <button type="button" class="retry" @click="store.clearFilters()">
+            Clear all filters
+          </button>
+        </div>
         <div v-else-if="store.total === 0" class="state">
           <p class="state-title">No photos indexed yet</p>
           <p class="state-sub">Add a folder and run a scan to build your library.</p>
           <RouterLink to="/scan" class="state-action">Run a scan</RouterLink>
         </div>
-        <PhotoGrid v-else />
+        <PhotoGrid v-else @open="store.openLightbox($event)" />
       </div>
     </section>
+
+    <FilterPanel />
+    <PhotoLightbox v-if="store.lightboxOpen" />
   </div>
 </template>
 
