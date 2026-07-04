@@ -9,3 +9,5 @@ os.environ.setdefault("SCAN_BATCH_SIZE", "50")
 os.environ.setdefault("RECOVER_SCANS_ON_STARTUP", "0")
 # Thumbnails must never land in the real cache during tests.
 os.environ.setdefault("THUMBNAIL_CACHE_DIR", tempfile.mkdtemp(prefix="aperture-test-thumbs-"))
+# Quarantine moves must never touch the real quarantine directory.
+os.environ.setdefault("QUARANTINE_DIR", tempfile.mkdtemp(prefix="aperture-test-quarantine-"))
