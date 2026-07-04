@@ -133,6 +133,11 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
                         return
                     per_root.append((existing, seen))
             _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
+            # Duplicate groups derive from photo state — refresh them while the
+            # scan is still "running" so the UI never sees stale groups.
+            from app.services.duplicates import rebuild_duplicate_groups
+
+            rebuild_duplicate_groups(session)
             scans.mark_finished(scan, "completed")
             logger.info(
                 "scan %s completed: %s found, %s added, %s errors",
