@@ -122,9 +122,13 @@ in Postgres**: the hash is split into 8 single-byte bands stored in indexed colu
 By pigeonhole, any two hashes within Hamming distance 7 agree exactly on at least one
 band, so `WHERE phash_b<i> = :band_i` (8 index lookups per photo) finds every
 candidate for the default threshold (6); candidates are verified with
-`bit_count(phash # :other) <= :threshold` (PG14+). New photos are checked
-incrementally — no global recompute. Verified pairs are clustered into groups via
-connected components (union-find in the dedupe pass).
+`bit_count((phash # :other)::bit(64)) <= :threshold` (PG14+; `bit_count` takes
+`bit`, not `bigint`). The band columns are Postgres generated columns, so the
+DB maintains them for free. The post-scan rebuild runs the same banding
+in-memory over all active photos (loading 100k (id, sha, phash) rows is ~10 MB);
+the SQL path serves per-photo lookup (`GET /api/photos/{id}/similar`). Verified
+pairs are clustered into groups via union-find; identical hashes collapse to one
+representative first, so burst shots cost one comparison, not O(k²).
 
 Alternatives considered:
 

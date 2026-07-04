@@ -68,17 +68,23 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
 - [x] Frontend tests: 25 vitest tests incl. photo loading, filtering, lightbox
       keyboard nav, scan progress/failure paths
 
-## Phase 5 — Duplicate detection
+## Phase 5 — Duplicate detection ✅ (2026-07-04)
 
-- [ ] **PR 5.1 — exact duplicates**: group by sha256 into duplicate_groups/members
-      after scans, groups API with pagination, stats integration + tests
-- [ ] **PR 5.2 — similar photos**: 8-band LSH columns + migration, candidate query,
-      bit_count verify, union-find grouping, configurable threshold (default 6),
-      clearly labeled "visually similar" + tests
-- [ ] **PR 5.3 — review UI**: duplicate groups list view, pair compare view
-      (similarity dial, diff table) per the design, decisions API
-      (keep/remove/undecided), resolved/freed counters
-- [ ] Frontend tests: group review, selection, decision recording
+- [x] **PR 5.1 — exact duplicates**: duplicate_groups/members/decisions tables,
+      post-scan rebuild with stable (kind, key) identity (review state survives
+      rescans; membership changes reopen groups), decisions API with remove-all
+      guard, dismiss, summary, pagination
+- [x] **PR 5.2 — similar photos**: 8 generated LSH band columns + indexes,
+      in-memory banding + union-find for the rebuild, SQL band lookup +
+      bit_count((a#b)::bit(64)) for GET /api/photos/{id}/similar, configurable
+      threshold (default 6, complete ≤7), labeled "visually similar" throughout
+- [x] **PR 5.3 — review UI**: groups list (kind filter, badges, dismiss), pair
+      compare per design (similarity dial, diff table with highlighted rows,
+      Keep A/B/both, skip, progress + resolved/freed chip); keeper re-anchors
+      when the user keeps B. Single-click decide (design's confirm step dropped —
+      decisions are reversible and actual deletion waits for Phase 6).
+- [x] Frontend tests: 8 review-flow store tests (queue, decisions, keeper switch,
+      error path). Live-verified end to end incl. decision → reviewed → summary.
 
 ## Phase 6 — Safe file management
 
