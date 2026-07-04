@@ -1,0 +1,99 @@
+/*
+ * Aperture design tokens — transcribed from design_handoff_photo_organizer/README.md.
+ * Light/dark are full palettes swapped via [data-theme] on <html>.
+ * Do not invent new colors; extend here only from the handoff spec.
+ */
+
+:root,
+:root[data-theme='light'] {
+  --app-bg: #fbfbfc;
+  --home-bg: #f4f4f6;
+  --grid-bg: #f2f2f4;
+  --bar: #ffffff;
+  --card: #ffffff;
+  --sidebar: #f6f6f8;
+  --border: #e6e6e9;
+  --divider: #ececee;
+  --chip: #f1f1f3;
+  --chip-hover: #ececef;
+  --hover: rgba(0, 0, 0, 0.04);
+  --fg: #26262b;
+  --sub: #83838a;
+  --muted: #a0a0a6;
+  --accent: oklch(0.6 0.09 250);
+  --on-accent: #ffffff;
+  --success: oklch(0.56 0.11 150);
+  --danger: oklch(0.55 0.16 25);
+  --sel-chip-bg: oklch(0.94 0.03 250);
+  --sel-chip-fg: oklch(0.42 0.09 250);
+  --sel-chip-border: oklch(0.78 0.07 250);
+  --cb-border: #cfcfd4;
+  --folder: oklch(0.78 0.05 90);
+  --skeleton: #e7e7ea;
+  --skeleton-hi: #f2f2f4;
+  --star: #ffd24a;
+  --seg-bg: #ececed;
+  --seg-active-bg: #ffffff;
+  --seg-active-fg: #26262b;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] {
+  --app-bg: #141416;
+  --home-bg: #0f0f11;
+  --grid-bg: #111113;
+  --bar: #1c1c1f;
+  --card: #202024;
+  --sidebar: #1a1a1d;
+  --border: #29292e;
+  --divider: #29292e;
+  --chip: #26262a;
+  --chip-hover: #26262b;
+  --hover: rgba(255, 255, 255, 0.05);
+  --fg: #e7e7ea;
+  --sub: #8a8a92;
+  --muted: #77777f;
+  --accent: oklch(0.68 0.1 250);
+  --on-accent: #0e0e12;
+  --success: oklch(0.62 0.12 150);
+  --danger: oklch(0.62 0.16 25);
+  --sel-chip-bg: oklch(0.32 0.06 250);
+  --sel-chip-fg: oklch(0.86 0.06 250);
+  --sel-chip-border: oklch(0.45 0.07 250);
+  --cb-border: #3d3d44;
+  --folder: oklch(0.62 0.05 90);
+  --skeleton: #242428;
+  --skeleton-hi: #2e2e34;
+  --star: #ffd24a;
+  --seg-bg: #26262a;
+  --seg-active-bg: #3a3a41;
+  --seg-active-fg: #e7e7ea;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+/* Base — type scale per handoff: body 13px Helvetica Neue; mono for counts/paths. */
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --font-body: 'Helvetica Neue', Helvetica, system-ui, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}

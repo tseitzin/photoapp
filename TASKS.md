@@ -11,22 +11,25 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
 - [x] Surface near-duplicate candidate-selection decision (LSH banding recommended;
       pgvector path kept open)
 - [x] Create README.md, docs/ARCHITECTURE.md, TASKS.md, CLAUDE.md
-- [ ] **Decision needed (Tim):** confirm LSH-banding recommendation for near-dup
-      candidate selection (vs BK-tree / pgvector-now)
-- [ ] **Decision needed (Tim):** RAW handling in v1 — skip entirely vs index
-      metadata-only without thumbnails
+- [x] **Decision (Tim, 2026-07-03):** LSH banding approved for near-dup candidate
+      selection
+- [x] **Decision (Tim, 2026-07-03):** RAW skipped entirely in v1
 
-## Phase 2 — Development foundation
+## Phase 2 — Development foundation ✅ (2026-07-03)
 
-- [ ] **PR 2.1 — repo + scaffolds**: git init, .gitignore, docker-compose.yml
-      (pgvector/pgvector:pg16, host port 5435), Vite scaffold (Vue 3 + TS + Router +
-      Pinia + Vitest), backend venv + FastAPI skeleton, .env.example files
-- [ ] **PR 2.2 — backend core**: pydantic-settings config, structured logging,
-      SQLAlchemy 2 session setup, Alembic init + first migration (enable pgvector ext),
-      /api/health, pytest config + smoke tests
-- [ ] **PR 2.3 — frontend shell**: design tokens as CSS custom properties (light/dark),
-      theme store persisted to localStorage['aperture-theme'], top bar + nav, routed
-      empty views, typed API client, health-check wiring, error/offline state
+- [x] **PR 2.1 — repo + scaffolds**: git init, .gitignore, docker-compose.yml
+      (pgvector/pgvector:pg16, host port 5435), create-vue scaffold (Vue 3 + TS +
+      Router + Pinia + Vitest + ESLint), backend venv + FastAPI skeleton,
+      .env.example files
+- [x] **PR 2.2 — backend core**: pydantic-settings config, JSON structured logging,
+      SQLAlchemy 2 session setup, Alembic + migration 0001 (enable pgvector ext),
+      GET /api/health (200 with database flag even when DB is down), pytest smoke
+      tests; verified live on :8003 against Docker PG
+- [x] **PR 2.3 — frontend shell**: design tokens as CSS custom properties (light/dark
+      from the handoff spec), theme store persisted to localStorage['aperture-theme']
+      (system preference as fallback), top bar + nav per design, routed placeholder
+      views, typed API client (ApiError with status; 0 = unreachable), health wiring
+      with offline banner + retry; CORS verified with real Origin header
 
 ## Phase 3 — Photo indexing
 

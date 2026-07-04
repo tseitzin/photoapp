@@ -3,5 +3,5 @@ import PlaceholderView from '@/components/PlaceholderView.vue'
 </script>
 
 <template>
-  <PlaceholderView title="Good afternoon" phase="Phase 4 (gallery integration)" />
+  <PlaceholderView title="Library" phase="Phase 4 (gallery integration)" />
 </template>
