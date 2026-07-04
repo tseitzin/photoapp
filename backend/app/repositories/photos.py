@@ -1,7 +1,8 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import BIT
 from sqlalchemy.orm import Session
 
 from app.models import Photo
@@ -121,6 +122,31 @@ class PhotoRepository:
             query.order_by(*_SORTS.get(sort, _SORTS["captured_desc"])).limit(limit).offset(offset)
         ).all()
         return items, total
+
+    def similar_to(self, photo: Photo, threshold: int, limit: int) -> list[tuple[Photo, int]]:
+        """LSH candidate lookup in SQL: indexed band equality narrows the field,
+        bit_count verifies the exact Hamming distance. Complete for threshold <= 7."""
+        if photo.phash is None:
+            return []
+        band_conditions = [
+            getattr(Photo, f"phash_b{band}") == ((photo.phash >> (band * 8)) & 255)
+            for band in range(8)
+        ]
+        # bit_count() takes bit/bytea, not bigint — cast the XOR result.
+        distance = func.bit_count(cast(Photo.phash.op("#")(photo.phash), BIT(64)))
+        rows = self._session.execute(
+            select(Photo, distance)
+            .where(
+                Photo.id != photo.id,
+                Photo.status == "active",
+                Photo.phash.is_not(None),
+                or_(*band_conditions),
+                distance <= threshold,
+            )
+            .order_by(distance, Photo.id)
+            .limit(limit)
+        )
+        return [(row[0], int(row[1])) for row in rows]
 
     def facets(self) -> tuple[dict[str, int], dict[str, int]]:
         """(file-type counts, camera counts) over non-quarantined photos.

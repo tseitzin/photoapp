@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from tests.images import make_image
+from tests.images import make_textured_image
 
 
 def _index(client: TestClient, root: Path) -> None:
@@ -11,10 +11,9 @@ def _index(client: TestClient, root: Path) -> None:
 
 
 def _make_dupes(root: Path, copies: int = 3, name: str = "orig") -> Path:
-    # Content must differ per name, or separately-named "originals" would be
-    # byte-identical and merge into a single group.
-    color = f"hsl({(ord(name[0]) * 47) % 360}, 65%, 45%)"
-    original = make_image(root / f"{name}.jpg", color=color, size=(600, 400))
+    # Textured + seeded per name: distinct names must be neither byte-identical
+    # (exact) nor perceptually close (similar) to each other.
+    original = make_textured_image(root / f"{name}.jpg", seed=ord(name[0]), size=(600, 400))
     for i in range(copies - 1):
         target = root / f"{name}_copy{i}.jpg"
         target.write_bytes(original.read_bytes())
@@ -25,7 +24,7 @@ def test_scan_builds_exact_group_with_keeper_and_members(
     client: TestClient, tmp_path: Path
 ) -> None:
     _make_dupes(tmp_path, copies=3)
-    make_image(tmp_path / "unique.jpg", color="gold")
+    make_textured_image(tmp_path / "unique.jpg", seed=7)
     _index(client, tmp_path)
 
     page = client.get("/api/duplicates/groups").json()
@@ -104,7 +103,7 @@ def test_group_disappears_when_duplicates_are_gone(client: TestClient, tmp_path:
 
 def test_rejects_decision_for_photo_outside_group(client: TestClient, tmp_path: Path) -> None:
     _make_dupes(tmp_path, copies=2)
-    make_image(tmp_path / "unrelated.jpg", color="pink")
+    make_textured_image(tmp_path / "unrelated.jpg", seed=7)
     _index(client, tmp_path)
     group = client.get("/api/duplicates/groups").json()["items"][0]
     outsider = next(

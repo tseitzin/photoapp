@@ -28,7 +28,7 @@ class DerivedGroup:
     members: dict[int, int]
 
 
-def _keeper(photos: list[PhotoInfo]) -> PhotoInfo:
+def keeper_of(photos: list[PhotoInfo]) -> PhotoInfo:
     """Suggested keeper: highest resolution, then largest file, then oldest row."""
     return max(
         photos,
@@ -50,7 +50,7 @@ def derive_exact_groups(photos: list[PhotoInfo]) -> list[DerivedGroup]:
             DerivedGroup(
                 kind="exact",
                 key=sha256,
-                keeper_photo_id=_keeper(copies).id,
+                keeper_photo_id=keeper_of(copies).id,
                 members={photo.id: 100 for photo in copies},
             )
         )

@@ -61,6 +61,12 @@ class FacetsRead(BaseModel):
     cameras: list[FacetValue]
 
 
+class SimilarPhotoRead(BaseModel):
+    photo: PhotoRead
+    distance: int
+    similarity_pct: int
+
+
 class FolderNodeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

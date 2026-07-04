@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Computed,
+    DateTime,
+    ForeignKey,
+    SmallInteger,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,8 +42,35 @@ class Photo(Base):
     camera_model: Mapped[str | None] = mapped_column(Text)
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
-    # 64-bit perceptual hash stored signed; LSH band columns arrive in Phase 5.
+    # 64-bit perceptual hash stored signed; the 8 generated band columns below
+    # implement LSH candidate lookup: any two hashes within Hamming distance 7
+    # agree exactly on at least one byte-band (pigeonhole), so an indexed
+    # equality check per band finds every candidate pair.
     phash: Mapped[int | None] = mapped_column(BigInteger)
+    phash_b0: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 0) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b1: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 8) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b2: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 16) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b3: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 24) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b4: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 32) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b5: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 40) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b6: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 48) & 255)::smallint", persisted=True), index=True
+    )
+    phash_b7: Mapped[int | None] = mapped_column(
+        SmallInteger, Computed("((phash >> 56) & 255)::smallint", persisted=True), index=True
+    )
     status: Mapped[str] = mapped_column(
         String(12), default="active", server_default="active", index=True
     )

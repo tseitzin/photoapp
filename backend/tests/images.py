@@ -26,3 +26,26 @@ def make_image(
     else:
         image.save(path)
     return path
+
+
+def make_textured_image(
+    path: Path, seed: int, size: tuple[int, int] = (400, 300), quality: int = 92
+) -> Path:
+    """Deterministic low-frequency random blocks, distinct per seed.
+
+    Flat or periodic images have degenerate/near-identical pHashes; seeded
+    random block luminance gives each seed an essentially random hash while
+    staying stable under resize/recompress (what pHash is supposed to match).
+    """
+    import random
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(seed)
+    cols, rows = 16, 12
+    blocks = Image.new("RGB", (cols, rows))
+    blocks.putdata(
+        [(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(cols * rows)]
+    )
+    image = blocks.resize(size, Image.Resampling.BILINEAR)
+    image.save(path, quality=quality)
+    return path

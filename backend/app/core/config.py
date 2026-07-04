@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # lightbox previews (generated on first request).
     thumbnail_size: int = 512
     preview_size: int = 2048
+    # Max pHash Hamming distance to call two photos "visually similar".
+    # Values above 7 lose the completeness guarantee of the 8-band LSH lookup.
+    similar_hamming_threshold: int = 6
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod

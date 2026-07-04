@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.dedupe.similarity import similarity_pct
 from app.models import Photo
 from app.repositories.photos import PhotoRepository, expand_ext_filter
 from app.scanner.thumbnails import ensure_thumbnail
@@ -17,6 +18,7 @@ from app.schemas.photos import (
     PhotoRead,
     PhotoSort,
     PhotoStatus,
+    SimilarPhotoRead,
 )
 from app.services.errors import NotFoundError
 
@@ -81,6 +83,26 @@ def get_photo(photo_id: int, repository: Repository) -> PhotoDetail:
     if photo is None:
         raise NotFoundError(f"Photo {photo_id} not found")
     return PhotoDetail.model_validate(photo)
+
+
+@router.get("/{photo_id}/similar")
+def get_similar(
+    photo_id: int,
+    repository: Repository,
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+) -> list[SimilarPhotoRead]:
+    photo = repository.get(photo_id)
+    if photo is None:
+        raise NotFoundError(f"Photo {photo_id} not found")
+    threshold = get_settings().similar_hamming_threshold
+    return [
+        SimilarPhotoRead(
+            photo=PhotoRead.model_validate(match),
+            distance=distance,
+            similarity_pct=similarity_pct(distance),
+        )
+        for match, distance in repository.similar_to(photo, threshold=threshold, limit=limit)
+    ]
 
 
 def _serve_image(photo: Photo | None, photo_id: int, size: int) -> FileResponse:

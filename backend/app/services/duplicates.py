@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import get_settings
 from app.dedupe.grouping import DerivedGroup, PhotoInfo, derive_exact_groups
+from app.dedupe.similarity import derive_similar_groups
 from app.models import (
     DuplicateDecision,
     DuplicateGroup,
@@ -43,7 +45,8 @@ def _load_photo_infos(session: Session) -> list[PhotoInfo]:
 
 
 def derive_groups(photos: list[PhotoInfo]) -> list[DerivedGroup]:
-    return derive_exact_groups(photos)
+    threshold = get_settings().similar_hamming_threshold
+    return derive_exact_groups(photos) + derive_similar_groups(photos, threshold)
 
 
 def rebuild_duplicate_groups(session: Session) -> RebuildResult:
