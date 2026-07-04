@@ -38,3 +38,31 @@ class PhotoPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+PhotoSort = Literal[
+    "captured_desc", "captured_asc", "name_asc", "name_desc", "size_desc", "size_asc"
+]
+
+
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class FacetsRead(BaseModel):
+    file_types: list[FacetValue]
+    cameras: list[FacetValue]
+
+
+class FolderNodeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    path: str
+    name: str
+    parent_path: str | None
+    depth: int
+    photo_count: int
+    direct_count: int
+    has_children: bool
+    root_id: int

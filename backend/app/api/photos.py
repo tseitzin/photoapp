@@ -7,9 +7,17 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import Photo
-from app.repositories.photos import PhotoRepository
+from app.repositories.photos import PhotoRepository, expand_ext_filter
 from app.scanner.thumbnails import ensure_thumbnail
-from app.schemas.photos import PhotoDetail, PhotoPage, PhotoRead, PhotoStatus
+from app.schemas.photos import (
+    FacetsRead,
+    FacetValue,
+    PhotoDetail,
+    PhotoPage,
+    PhotoRead,
+    PhotoSort,
+    PhotoStatus,
+)
 from app.services.errors import NotFoundError
 
 router = APIRouter(prefix="/photos")
@@ -31,13 +39,39 @@ def list_photos(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     status: PhotoStatus | None = None,
+    folder: Annotated[str | None, Query(description="Directory path; recursive")] = None,
+    type: Annotated[list[str] | None, Query()] = None,  # noqa: A002 - API name
+    camera: Annotated[list[str] | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    sort: PhotoSort = "captured_desc",
 ) -> PhotoPage:
-    items, total = repository.list_page(limit=limit, offset=offset, status=status)
+    items, total = repository.list_page(
+        limit=limit,
+        offset=offset,
+        status=status,
+        folder=folder,
+        exts=expand_ext_filter(type) if type else None,
+        cameras=camera,
+        q=q,
+        sort=sort,
+    )
     return PhotoPage(
         items=[PhotoRead.model_validate(photo) for photo in items],
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/facets")
+def get_facets(repository: Repository) -> FacetsRead:
+    type_counts, camera_counts = repository.facets()
+    return FacetsRead(
+        file_types=[
+            FacetValue(value=value, count=count)
+            for value, count in sorted(type_counts.items(), key=lambda kv: -kv[1])
+        ],
+        cameras=[FacetValue(value=value, count=count) for value, count in camera_counts.items()],
     )
 
 

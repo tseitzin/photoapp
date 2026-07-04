@@ -1,4 +1,5 @@
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8003'
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8003'
+const BASE_URL = API_BASE_URL
 
 export class ApiError extends Error {
   /** HTTP status; 0 when the backend could not be reached at all. */
