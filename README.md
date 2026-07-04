@@ -5,12 +5,15 @@ A local-first web application for organizing and searching a personal photo libr
 are never moved or modified. The app provides browsing, metadata search/filtering,
 exact and near-duplicate detection, and a quarantine-first safe-deletion workflow.
 
-**Status: Phases 1–5 complete.** Scan roots, indexing with live progress,
-full library browsing (grid, folders, filters, search, lightbox), and duplicate
-detection with review: exact groups (SHA-256) and visually similar groups
-(LSH-banded pHash), reviewed pair-by-pair with keep/remove decisions. Safe file
-management — actually quarantining what you marked — is Phase 6, next.
-See [TASKS.md](TASKS.md).
+**Status: v1 feature-complete (Phases 1–6).** Scan roots, incremental indexing
+with live progress, full library browsing (grid, folders, filters, search,
+lightbox), duplicate detection (exact SHA-256 groups + visually similar via
+LSH-banded pHash) with pair-by-pair review, and quarantine-first file
+management: marked photos move to a quarantine folder behind confirmation
+dialogs, can be restored any time, and are only ever permanently deleted from
+quarantine after a typed confirmation — every operation audited.
+Deferred to future work: the Organize (move/tag/rename) flow, RAW support,
+location grouping, pgvector embeddings. See [TASKS.md](TASKS.md).
 
 The visual design lives in [`design_handoff_photo_organizer/`](design_handoff_photo_organizer/)
 (HTML prototypes + screenshots + handoff spec). It is the source of truth for look and
