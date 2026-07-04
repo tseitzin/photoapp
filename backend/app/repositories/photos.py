@@ -29,6 +29,8 @@ _SORTS: dict[str, tuple[ColumnElement[Any], ...]] = {
     "name_desc": (Photo.filename.desc(), Photo.id.desc()),
     "size_desc": (Photo.size_bytes.desc(), Photo.id.desc()),
     "size_asc": (Photo.size_bytes.asc(), Photo.id.asc()),
+    # Most recently indexed first — "Recent imports" on Home.
+    "added_desc": (Photo.id.desc(),),
 }
 
 

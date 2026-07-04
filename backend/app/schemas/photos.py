@@ -41,7 +41,13 @@ class PhotoPage(BaseModel):
 
 
 PhotoSort = Literal[
-    "captured_desc", "captured_asc", "name_asc", "name_desc", "size_desc", "size_asc"
+    "captured_desc",
+    "captured_asc",
+    "name_asc",
+    "name_desc",
+    "size_desc",
+    "size_asc",
+    "added_desc",
 ]
 
 

@@ -58,7 +58,12 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
       </div>
 
       <div class="grid-scroll">
-        <p v-if="store.loading" class="state">Loading photos…</p>
+        <div v-if="store.loading" class="skeleton" aria-label="Loading photos">
+          <div class="skeleton-header" />
+          <div class="skeleton-grid">
+            <div v-for="i in 24" :key="i" class="skeleton-tile" />
+          </div>
+        </div>
         <div v-else-if="store.error" class="state state--error">
           <p>Can’t reach the library service</p>
           <code class="error-detail">{{ store.error }}</code>
@@ -201,6 +206,46 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
   background: var(--card);
   color: var(--fg);
   cursor: pointer;
+}
+
+.skeleton {
+  padding: 18px;
+}
+
+.skeleton-header {
+  width: 180px;
+  height: 16px;
+  border-radius: 5px;
+  margin-bottom: 14px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 9px;
+}
+
+.skeleton-tile {
+  aspect-ratio: 1;
+  border-radius: 4px;
+}
+
+.skeleton-header,
+.skeleton-tile {
+  background: linear-gradient(
+    100deg,
+    var(--skeleton) 40%,
+    var(--skeleton-hi) 50%,
+    var(--skeleton) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 900px) {

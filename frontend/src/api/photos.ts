@@ -8,6 +8,7 @@ export type PhotoSort =
   | 'name_desc'
   | 'size_desc'
   | 'size_asc'
+  | 'added_desc'
 
 export interface PhotoRead {
   id: number

@@ -23,7 +23,25 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, `Cannot reach the library service at ${BASE_URL}`)
   }
   if (!response.ok) {
-    throw new ApiError(response.status, `${init?.method ?? 'GET'} ${path} → ${response.status}`)
+    let detail = ''
+    try {
+      detail = ((await response.json()) as { detail?: string }).detail ?? ''
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(
+      response.status,
+      detail || `${init?.method ?? 'GET'} ${path} → ${response.status}`,
+    )
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+export function requestJson<T>(path: string, method: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method,
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }

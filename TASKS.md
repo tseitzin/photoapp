@@ -48,18 +48,25 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
       (pagination + status filter). Verified live end-to-end incl. move+delete
       rescan with the real process pool.
 
-## Phase 4 — Gallery integration
+## Phase 4 — Gallery integration ✅ (2026-07-03)
 
-- [ ] **PR 4.1 — thumbnails**: pHash + thumbnail generation in the pipeline, cache
-      dir + stable keys, regenerate on change, serve by photo id (no raw paths) + tests
-- [ ] **PR 4.2 — library core**: folder tree API + component, photo grid with
-      virtual scrolling, pagination API, selection state
-- [ ] **PR 4.3 — filters + lightbox**: file-type/camera/rating filters, sort,
-      group-by folder/date/camera (location deferred), metadata panel, lightbox with
-      keyboard nav + filmstrip
-- [ ] **PR 4.4 — home + scan UI**: Home dashboard with real stats API, Scan screen
-      (setup → progress → done) polling real scan state, library empty/loading states
-- [ ] Frontend tests: photo loading, filtering, scan progress display
+- [x] **PR 4.1 — thumbnails**: pHash + 512px webp thumbnails in the pipeline,
+      sha256-addressed cache (regenerates on content change, wipe-safe), on-demand
+      2048px previews, served by photo id only with immutable cache headers
+- [x] **PR 4.2 — library core**: /api/folders tree with rolled-up counts, photo
+      filters (folder/type/camera/search) + facets + 7 sorts; FolderTree, PhotoGrid
+      with sections + IntersectionObserver infinite scroll, Library 3-pane layout
+- [x] **PR 4.3 — filters + lightbox**: file-type chips + camera checkboxes from
+      real facets, metadata panel, lightbox (keyboard nav, filmstrip, EXIF ISO),
+      group-by segmented (Folders/Date/Camera) + debounced search in the top bar.
+      *Deferred: min-rating filter — no favorite/rating data model in v1.*
+- [x] **PR 4.4 — home + scan UI**: /api/stats (incl. exact-duplicate preview from
+      sha256), Home dashboard (stat cards, entry cards, recent imports), Scan screen
+      setup → scanning (1s polling, progress bar, stat tiles, cancel) → done,
+      library shimmer skeleton + no-results state. Live-verified against a scratch
+      library (tree rollup, facets, filters, thumbnails, duplicate stats).
+- [x] Frontend tests: 25 vitest tests incl. photo loading, filtering, lightbox
+      keyboard nav, scan progress/failure paths
 
 ## Phase 5 — Duplicate detection
 
