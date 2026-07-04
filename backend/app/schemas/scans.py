@@ -23,6 +23,7 @@ class ScanRead(BaseModel):
     files_changed: int
     files_unchanged: int
     files_missing: int
+    files_moved: int
     error_count: int
     current_path: str | None
     message: str | None

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # -1 = one process per core minus one; 0 = in-process serial (tests/debugging)
     scan_workers: int = -1
     scan_batch_size: int = 500
+    # Mark scans orphaned by a crash/restart as failed on startup (off in tests).
+    recover_scans_on_startup: bool = True
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod

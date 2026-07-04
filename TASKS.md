@@ -31,16 +31,22 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
       views, typed API client (ApiError with status; 0 = unreachable), health wiring
       with offline banner + retry; CORS verified with real Origin header
 
-## Phase 3 — Photo indexing
+## Phase 3 — Photo indexing ✅ (2026-07-03)
 
-- [ ] **PR 3.1 — scan roots**: scan_roots model/migration/repo/service/API + tests
-- [ ] **PR 3.2 — discovery walker**: recursive scandir, symlink-cycle safety,
-      supported-extension filter, per-file error capture, streaming batches + tests
-- [ ] **PR 3.3 — processing pipeline**: single-pass read → sha256 + decode → EXIF,
-      dimensions, captured_at, camera; photos model/migration; ProcessPoolExecutor;
-      job runner + scans/scan_errors persistence; progress API + tests
-- [ ] **PR 3.4 — incremental rescan**: skip unchanged (size+mtime), detect
-      added/changed/missing/moved, resumability + tests
+- [x] **PR 3.1 — scan roots**: model/migration/repo/service/API; rejects relative,
+      nonexistent, duplicate, and nested/containing roots; DB test infra
+- [x] **PR 3.2 — discovery walker**: streaming scandir generator, symlinks never
+      followed, (dev,ino) cycle guard, hidden entries skipped, per-entry errors
+      yielded without aborting
+- [x] **PR 3.3 — processing pipeline**: single-pass read → sha256 + decode → EXIF/
+      dimensions/camera; corrupt files indexed with last_error; ThreadJobRunner +
+      ProcessPoolExecutor (SCAN_WORKERS); batched commits; scans API with progress,
+      cancel, paginated errors
+- [x] **PR 3.4 — incremental rescan**: skip unchanged (size+mtime), missing
+      flagged not purged, moves detected by sha256 (photo id preserved),
+      interrupted scans failed on startup; basic photos list/detail API
+      (pagination + status filter). Verified live end-to-end incl. move+delete
+      rescan with the real process pool.
 
 ## Phase 4 — Gallery integration
 

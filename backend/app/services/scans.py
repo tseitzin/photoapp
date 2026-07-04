@@ -11,8 +11,10 @@ import os
 from collections.abc import Callable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -110,15 +112,26 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
         roots = _roots_for(session, scan)
         scans.mark_running(scan)
         try:
+            per_root: list[tuple[dict[str, ExistingFile], set[str]]] = []
+            added_by_sha: dict[str, list[str]] = {}
             with _batch_processor(settings.scan_workers) as run_batch:
                 for root in roots:
-                    cancelled = _scan_root(
-                        session, scans, photos, scan, root, run_batch, settings.scan_batch_size
+                    cancelled, existing, seen = _scan_root(
+                        session,
+                        scans,
+                        photos,
+                        scan,
+                        root,
+                        run_batch,
+                        settings.scan_batch_size,
+                        added_by_sha,
                     )
                     if cancelled:
                         scans.mark_finished(scan, "cancelled")
                         logger.info("scan %s cancelled", scan_id)
                         return
+                    per_root.append((existing, seen))
+            _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
             scans.mark_finished(scan, "completed")
             logger.info(
                 "scan %s completed: %s found, %s added, %s errors",
@@ -159,15 +172,17 @@ def _scan_root(
     root: ScanRoot,
     run_batch: BatchProcessor,
     batch_size: int,
-) -> bool:
-    """Walk one root. Returns True if the scan was cancelled mid-walk."""
+    added_by_sha: dict[str, list[str]],
+) -> tuple[bool, dict[str, ExistingFile], set[str]]:
+    """Walk one root. Returns (cancelled, existing index, paths seen on disk)."""
     existing = photos.index_for_root(root.id)
+    seen: set[str] = set()
     pending: list[str] = []
 
     def flush() -> bool:
         if pending:
             for result in run_batch(pending):
-                _apply_result(session, scans, scan, root, existing, result)
+                _apply_result(session, scans, scan, root, existing, result, added_by_sha)
             scan.current_path = pending[-1]
             pending.clear()
         session.commit()
@@ -178,14 +193,15 @@ def _scan_root(
             scans.add_error(scan, item.path, item.error)
             continue
         scan.files_found += 1
+        seen.add(item.path)
         if _is_unchanged(existing.get(item.path), item):
             scan.files_unchanged += 1
             scan.files_processed += 1
             continue
         pending.append(item.path)
         if len(pending) >= batch_size and flush():
-            return True
-    return flush()
+            return True, existing, seen
+    return flush(), existing, seen
 
 
 def _is_unchanged(known: ExistingFile | None, item: DiscoveredFile) -> bool:
@@ -204,6 +220,7 @@ def _apply_result(
     root: ScanRoot,
     existing: dict[str, ExistingFile],
     result: ProcessedFile,
+    added_by_sha: dict[str, list[str]],
 ) -> None:
     if result.error is not None:
         scans.add_error(scan, result.path, result.error)
@@ -240,6 +257,8 @@ def _apply_result(
             )
         )
         scan.files_added += 1
+        if result.sha256 is not None:
+            added_by_sha.setdefault(result.sha256, []).append(result.path)
     else:
         photo = session.get(Photo, known.photo_id)
         if photo is not None:
@@ -247,3 +266,92 @@ def _apply_result(
                 setattr(photo, key, value)
         scan.files_changed += 1
     scan.files_processed += 1
+
+
+def _reconcile_moves_and_missing(
+    session: Session,
+    scan: Scan,
+    per_root: list[tuple[dict[str, ExistingFile], set[str]]],
+    added_by_sha: dict[str, list[str]],
+) -> None:
+    """Pair vanished paths with same-content additions (moves); flag the rest missing.
+
+    Matching by sha256 can pair the "wrong" copy when identical files move
+    around, but content-identical pairings are interchangeable by definition.
+    """
+    for existing, seen in per_root:
+        for path, info in existing.items():
+            if path in seen:
+                continue
+            new_path = _take_added_path(added_by_sha, info.sha256)
+            if new_path is not None:
+                _record_move(session, scan, info, new_path)
+            elif info.status == "active":
+                photo = session.get(Photo, info.photo_id)
+                if photo is not None:
+                    photo.status = "missing"
+                scan.files_missing += 1
+    session.commit()
+
+
+def _take_added_path(added_by_sha: dict[str, list[str]], sha256: str | None) -> str | None:
+    if sha256 is None:
+        return None
+    paths = added_by_sha.get(sha256)
+    if not paths:
+        return None
+    return paths.pop()
+
+
+def _record_move(session: Session, scan: Scan, info: ExistingFile, new_path: str) -> None:
+    """Keep the original Photo row (stable id for decisions/audit); retarget its path."""
+    new_photo = session.scalar(select(Photo).where(Photo.path == new_path))
+    old_photo = session.get(Photo, info.photo_id)
+    if new_photo is None or old_photo is None:  # pragma: no cover - defensive
+        return
+    copied = {
+        column: getattr(new_photo, column)
+        for column in (
+            "path",
+            "root_id",
+            "filename",
+            "ext",
+            "mime",
+            "size_bytes",
+            "mtime_ns",
+            "width",
+            "height",
+            "captured_at",
+            "camera_make",
+            "camera_model",
+            "exif",
+            "sha256",
+            "last_error",
+        )
+    }
+    session.delete(new_photo)
+    session.flush()  # release the unique(path) constraint before retargeting
+    for column, value in copied.items():
+        setattr(old_photo, column, value)
+    old_photo.status = "active"
+    scan.files_moved += 1
+    scan.files_added -= 1
+
+
+def recover_interrupted_scans(session: Session) -> int:
+    """Mark scans left pending/running by a crash or restart as failed.
+
+    Cheap to re-run: the next scan skips unchanged files, so nothing is lost
+    beyond the final uncommitted batch.
+    """
+    stale = session.scalars(select(Scan).where(Scan.status.in_(ACTIVE_SCAN_STATUSES))).all()
+    for scan in stale:
+        scan.status = "failed"
+        scan.message = (
+            "Interrupted by an app restart. Re-run the scan; unchanged files are skipped."
+        )
+        scan.finished_at = datetime.now(UTC)
+    session.commit()
+    if stale:
+        logger.warning("recovered %d interrupted scan(s)", len(stale))
+    return len(stale)

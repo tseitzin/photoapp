@@ -27,6 +27,7 @@ class Scan(Base):
     files_changed: Mapped[int] = mapped_column(default=0, server_default="0")
     files_unchanged: Mapped[int] = mapped_column(default=0, server_default="0")
     files_missing: Mapped[int] = mapped_column(default=0, server_default="0")
+    files_moved: Mapped[int] = mapped_column(default=0, server_default="0")
     error_count: Mapped[int] = mapped_column(default=0, server_default="0")
     current_path: Mapped[str | None] = mapped_column(Text)
     message: Mapped[str | None] = mapped_column(Text)
