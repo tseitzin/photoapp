@@ -9,6 +9,7 @@ import io
 import logging
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from PIL import Image, ImageOps
 
@@ -31,9 +32,16 @@ def write_thumbnail(image: Image.Image, cache_dir: Path, sha256: str, size: int)
     thumb.thumbnail((size, size))
     if thumb.mode not in ("RGB", "RGBA"):
         thumb = thumb.convert("RGB")
-    tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
-    thumb.save(tmp, "WEBP", quality=_WEBP_QUALITY)
-    os.replace(tmp, target)  # atomic: readers never see a partial file
+    # Unique per call (not just per process): two threads generating the same
+    # sha256 (e.g. both panes of an exact-duplicate compare) must not share a
+    # temp file, or their writes corrupt each other. Both then os.replace onto
+    # the same target atomically — identical content, so last writer wins safely.
+    tmp = target.with_name(f"{target.name}.{uuid4().hex}.tmp")
+    try:
+        thumb.save(tmp, "WEBP", quality=_WEBP_QUALITY)
+        os.replace(tmp, target)  # atomic: readers never see a partial file
+    finally:
+        tmp.unlink(missing_ok=True)  # clean up if save/replace failed partway
     return target
 
 

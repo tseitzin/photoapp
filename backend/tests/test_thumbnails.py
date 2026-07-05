@@ -1,4 +1,6 @@
+import hashlib
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -6,8 +8,33 @@ from PIL import Image
 
 from app.core.config import get_settings
 from app.scanner.processing import process_file
-from app.scanner.thumbnails import thumbnail_path
+from app.scanner.thumbnails import ensure_thumbnail, thumbnail_path
 from tests.images import make_image
+
+
+def test_concurrent_generation_of_same_sha_all_succeed(tmp_path: Path) -> None:
+    """Two panes of an exact-duplicate compare request the same sha256 preview
+    at once; concurrent generation must not corrupt the file or fail."""
+    source = make_image(tmp_path / "shared.jpg", size=(1200, 900))
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    cache = tmp_path / "cache"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(
+            pool.map(
+                lambda _: ensure_thumbnail(str(source), sha256, cache, 512),
+                range(24),
+            )
+        )
+
+    assert all(path is not None for path in results)
+    final = thumbnail_path(cache, sha256, 512)
+    assert final.is_file()
+    with Image.open(final) as image:  # must be a valid, fully-written webp
+        assert image.format == "WEBP"
+        assert max(image.size) == 512
+    # No temp files left behind.
+    assert not list(cache.rglob("*.tmp"))
 
 
 def test_processing_computes_phash_and_writes_sha_keyed_thumbnail(tmp_path: Path) -> None:

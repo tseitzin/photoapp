@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { getPhoto, previewUrl, type PhotoDetail } from '@/api/photos'
+import { getPhoto, previewUrl, thumbnailUrl, type PhotoDetail } from '@/api/photos'
 import { useDuplicatesStore } from '@/stores/duplicates'
 import { formatBytes, formatCount, formatDate } from '@/utils/format'
 
 const store = useDuplicatesStore()
 
 const details = ref<Record<number, PhotoDetail>>({})
+
+// Fade the full preview in once it decodes; until then (or if it fails) the
+// cached thumbnail behind it stays visible.
+function markLoaded(event: Event): void {
+  ;(event.target as HTMLImageElement).classList.add('loaded')
+}
 
 watch(
   () => store.currentPair,
@@ -89,10 +95,18 @@ const rows = computed<DiffRow[]>(() => {
     <div class="panes">
       <figure class="pane">
         <figcaption class="tag tag--keep">Suggested keeper</figcaption>
-        <img
-          :src="previewUrl(store.currentPair.a.photo.id)"
-          :alt="store.currentPair.a.photo.filename"
-        />
+        <div
+          class="pane-image"
+          :style="{ backgroundImage: `url(${thumbnailUrl(store.currentPair.a.photo.id)})` }"
+        >
+          <img
+            :key="store.currentPair.a.photo.id"
+            class="pane-preview"
+            :src="previewUrl(store.currentPair.a.photo.id)"
+            :alt="store.currentPair.a.photo.filename"
+            @load="markLoaded"
+          />
+        </div>
         <p class="pane-name">{{ store.currentPair.a.photo.filename }}</p>
       </figure>
 
@@ -127,10 +141,18 @@ const rows = computed<DiffRow[]>(() => {
         >
           {{ store.currentPair.group.kind === 'exact' ? 'Exact duplicate' : 'Visually similar' }}
         </figcaption>
-        <img
-          :src="previewUrl(store.currentPair.b.photo.id)"
-          :alt="store.currentPair.b.photo.filename"
-        />
+        <div
+          class="pane-image"
+          :style="{ backgroundImage: `url(${thumbnailUrl(store.currentPair.b.photo.id)})` }"
+        >
+          <img
+            :key="store.currentPair.b.photo.id"
+            class="pane-preview"
+            :src="previewUrl(store.currentPair.b.photo.id)"
+            :alt="store.currentPair.b.photo.filename"
+            @load="markLoaded"
+          />
+        </div>
         <p class="pane-name">{{ store.currentPair.b.photo.filename }}</p>
       </figure>
     </div>
@@ -209,13 +231,31 @@ const rows = computed<DiffRow[]>(() => {
   gap: 8px;
 }
 
-.pane img {
+.pane-image {
   flex: 1;
   min-height: 0;
-  width: 100%;
-  object-fit: contain;
+  position: relative;
   border-radius: 8px;
-  background: var(--grid-bg);
+  overflow: hidden;
+  /* Cached thumbnail shown instantly; the full preview fades in over it. */
+  background-color: var(--grid-bg);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.pane-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pane-preview.loaded {
+  opacity: 1;
 }
 
 .pane-name {
