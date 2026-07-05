@@ -30,7 +30,8 @@ export const useQuarantineStore = defineStore('quarantine', () => {
     try {
       const [markedResult, quarantinedPage, opsPage] = await Promise.all([
         listMarkedForRemoval(),
-        listPhotos({ status: 'quarantined', limit: 200 }),
+        // High limit so "select all" covers the whole quarantine in one view.
+        listPhotos({ status: 'quarantined', limit: 1000 }),
         listFileOperations(50),
       ])
       marked.value = markedResult

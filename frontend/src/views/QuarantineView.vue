@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watchEffect } from 'vue'
 import { thumbnailUrl } from '@/api/photos'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useQuarantineStore } from '@/stores/quarantine'
@@ -12,6 +12,25 @@ onMounted(() => void store.load())
 const confirmingRemoval = ref(false)
 const confirmingDelete = ref(false)
 const selected = ref(new Set<number>())
+
+const allSelected = computed(
+  () =>
+    store.quarantined.length > 0 && store.quarantined.every((photo) => selected.value.has(photo.id)),
+)
+
+// Drive the native indeterminate state (only some rows selected).
+const selectAllEl = ref<HTMLInputElement | null>(null)
+watchEffect(() => {
+  if (!selectAllEl.value) return
+  const chosen = store.quarantined.filter((photo) => selected.value.has(photo.id)).length
+  selectAllEl.value.indeterminate = chosen > 0 && chosen < store.quarantined.length
+})
+
+function toggleSelectAll(): void {
+  selected.value = allSelected.value
+    ? new Set()
+    : new Set(store.quarantined.map((photo) => photo.id))
+}
 
 const markedBytes = computed(() =>
   store.marked.reduce((sum, photo) => sum + photo.size_bytes, 0),
@@ -113,6 +132,17 @@ function opLabel(op: string): string {
       <header class="card-head">
         <h2 class="card-title">In quarantine</h2>
         <span class="muted">{{ formatCount(store.quarantinedTotal) }} photos</span>
+        <label v-if="store.quarantined.length" class="select-all">
+          <input
+            ref="selectAllEl"
+            type="checkbox"
+            class="row-check"
+            :checked="allSelected"
+            aria-label="Select all quarantined photos"
+            @change="toggleSelectAll"
+          />
+          Select all
+        </label>
         <button
           type="button"
           class="btn"
@@ -295,6 +325,15 @@ function opLabel(op: string): string {
 .muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+.select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sub);
+  cursor: pointer;
 }
 
 .btn {
