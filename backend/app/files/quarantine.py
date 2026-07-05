@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -249,3 +249,22 @@ class FileManagementService:
 
         self._session.commit()
         return BatchResult(batch_id=batch_id, results=results)
+
+    def reset_deletion_history(self) -> int:
+        """Clear audit rows for files no longer in the library, starting the
+        lifetime deletion tally fresh.
+
+        Targets rows whose photo is gone (photo_id IS NULL) — that's every
+        permanent-delete record plus the stale quarantine records left behind by
+        deleted photos. Rows for photos that still exist (e.g. currently
+        quarantined) are kept, so restore is unaffected. Returns rows cleared.
+        """
+        orphaned = FileOperation.photo_id.is_(None)
+        cleared = (
+            self._session.scalar(select(func.count()).select_from(FileOperation).where(orphaned))
+            or 0
+        )
+        self._session.execute(delete(FileOperation).where(orphaned))
+        self._session.commit()
+        logger.info("reset deletion history: cleared %d audit row(s)", cleared)
+        return cleared

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { resetDeletionHistory } from '@/api/files'
 import { listPhotos, thumbnailUrl, type PhotoRead } from '@/api/photos'
 import { getStats, type Stats } from '@/api/stats'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { formatBytes, formatCount } from '@/utils/format'
 
 const stats = ref<Stats | null>(null)
 const recent = ref<PhotoRead[]>([])
 const failed = ref(false)
+const confirmingReset = ref(false)
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -14,6 +17,24 @@ const greeting = computed(() => {
   if (hour < 18) return 'Good afternoon'
   return 'Good evening'
 })
+
+async function refreshStats(): Promise<void> {
+  try {
+    stats.value = await getStats()
+  } catch {
+    failed.value = true
+  }
+}
+
+async function confirmReset(): Promise<void> {
+  confirmingReset.value = false
+  try {
+    await resetDeletionHistory()
+    await refreshStats()
+  } catch {
+    failed.value = true
+  }
+}
 
 onMounted(async () => {
   try {
@@ -71,6 +92,17 @@ onMounted(async () => {
       </div>
     </div>
 
+    <div class="stats-actions">
+      <button
+        type="button"
+        class="reset-btn"
+        :disabled="!stats"
+        @click="confirmingReset = true"
+      >
+        Reset deletion counter
+      </button>
+    </div>
+
     <div class="entries">
       <RouterLink to="/library" class="entry">
         <div class="mosaic" aria-hidden="true">
@@ -122,6 +154,21 @@ onMounted(async () => {
         </RouterLink>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="confirmingReset"
+      title="Reset the deletion counter?"
+      confirm-label="Reset to zero"
+      @confirm="confirmReset"
+      @cancel="confirmingReset = false"
+    >
+      <p>
+        This sets <strong>Deleted</strong> and <strong>Space saved</strong> back to zero and
+        clears the deletion history for photos already removed. It does not touch your library
+        or any photos currently in quarantine — only the running tally is reset, and counting
+        starts fresh from now.
+      </p>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -184,6 +231,32 @@ onMounted(async () => {
   margin: 0;
   font-size: 11.5px;
   color: var(--sub);
+}
+
+.stats-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -14px 0 26px;
+}
+
+.reset-btn {
+  border: 0;
+  background: transparent;
+  color: var(--sub);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.reset-btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--hover);
+}
+
+.reset-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .entries {

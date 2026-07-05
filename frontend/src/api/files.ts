@@ -51,3 +51,8 @@ export function deletePhotosPermanently(
 export function listFileOperations(limit = 50, offset = 0): Promise<FileOperationPage> {
   return request<FileOperationPage>(`/api/file-operations?limit=${limit}&offset=${offset}`)
 }
+
+/** Reset the lifetime deletion tally and clear history for removed files. */
+export function resetDeletionHistory(): Promise<{ cleared: number }> {
+  return requestJson<{ cleared: number }>('/api/file-operations/reset', 'POST', {})
+}

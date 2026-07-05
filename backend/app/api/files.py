@@ -14,6 +14,7 @@ from app.schemas.files import (
     FileOperationRead,
     ItemResultRead,
     QuarantineRequest,
+    ResetResult,
     RestoreRequest,
 )
 
@@ -51,6 +52,12 @@ def restore(body: RestoreRequest, service: Service) -> BatchResultRead:
 @router.post("/quarantine/delete")
 def delete_permanently(body: DeleteRequest, service: Service) -> BatchResultRead:
     return _to_read(service.delete_permanently(body.photo_ids, confirm=body.confirm))
+
+
+@router.post("/file-operations/reset")
+def reset_deletion_history(service: Service) -> ResetResult:
+    """Reset the lifetime deletion tally and clear history for removed files."""
+    return ResetResult(cleared=service.reset_deletion_history())
 
 
 @router.get("/file-operations")

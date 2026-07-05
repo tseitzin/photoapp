@@ -81,11 +81,15 @@ scans ──────┘      ├──▶ file_operations (audit)
 - **duplicate_decisions** — `group_id, photo_id, decision (keep|remove|undecided),
   decided_at`. This is the "user decisions" tracking — review state, not accounts.
 - **file_operations** — audit log: `photo_id, op (quarantine|restore|delete),
-  src_path, dest_path, size_bytes, batch_id, performed_at`. Never pruned.
-  `size_bytes` is captured at operation time so lifetime tallies (photos
-  deleted, disk space reclaimed = `SUM(size_bytes) WHERE op='delete'`) survive
-  after the photo row is gone — the count is exact; byte totals accrue only for
-  deletions recorded after `size_bytes` was added (migration 0009).
+  src_path, dest_path, size_bytes, batch_id, performed_at`. Never auto-pruned
+  by the system. `size_bytes` is captured at operation time so lifetime tallies
+  (photos deleted, disk space reclaimed = `SUM(size_bytes) WHERE op='delete'`)
+  survive after the photo row is gone — the count is exact; byte totals accrue
+  only for deletions recorded after `size_bytes` was added (migration 0009).
+  The user can explicitly reset the tally (`POST /api/file-operations/reset`),
+  which clears rows for removed files (`photo_id IS NULL`) — every delete record
+  plus stale quarantine records — while keeping rows for photos that still exist
+  (e.g. currently quarantined), so restore is unaffected.
 
 Originals are never stored in Postgres — paths and metadata only.
 

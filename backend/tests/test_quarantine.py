@@ -339,3 +339,41 @@ class TestAuditAndMarked:
 
         client.post("/api/quarantine", json={"photo_ids": [loser]})
         assert client.get("/api/duplicates/marked").json() == []
+
+
+class TestResetDeletionHistory:
+    def test_reset_zeroes_the_tally_and_clears_removed_file_history(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        make_textured_image(tmp_path / "gone.jpg", seed=1)
+        make_textured_image(tmp_path / "keep.jpg", seed=2)
+        _index(client, tmp_path)
+        gone = _photo_ids(client)["gone.jpg"]
+        client.post("/api/quarantine", json={"photo_ids": [gone]})
+        client.post("/api/quarantine/delete", json={"photo_ids": [gone], "confirm": True})
+        assert client.get("/api/stats").json()["deleted_count"] == 1
+
+        reset = client.post("/api/file-operations/reset")
+
+        assert reset.status_code == 200
+        # one delete row + the stale quarantine row for the removed photo
+        assert reset.json()["cleared"] == 2
+        stats = client.get("/api/stats").json()
+        assert stats["deleted_count"] == 0
+        assert stats["space_saved_bytes"] == 0
+        assert client.get("/api/file-operations").json()["total"] == 0
+
+    def test_reset_keeps_history_for_currently_quarantined_photos(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        make_textured_image(tmp_path / "held.jpg", seed=1)
+        _index(client, tmp_path)
+        held = _photo_ids(client)["held.jpg"]
+        client.post("/api/quarantine", json={"photo_ids": [held]})
+
+        cleared = client.post("/api/file-operations/reset").json()["cleared"]
+
+        assert cleared == 0  # the photo still exists, so its record stays
+        # restore still works because its quarantine record was preserved
+        restored = client.post("/api/quarantine/restore", json={"photo_ids": [held]})
+        assert restored.json()["succeeded"] == 1

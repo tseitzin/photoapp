@@ -50,3 +50,7 @@ class FileOperationPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ResetResult(BaseModel):
+    cleared: int
