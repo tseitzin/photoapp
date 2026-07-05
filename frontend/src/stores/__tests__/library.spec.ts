@@ -50,7 +50,7 @@ describe('library store', () => {
     listPhotosMock.mockReset()
   })
 
-  it('loads the first page and reports the total', async () => {
+  it('loads the first page and reports the total and page count', async () => {
     listPhotosMock.mockResolvedValue(page([1, 2], 5))
     const store = useLibraryStore()
 
@@ -58,36 +58,90 @@ describe('library store', () => {
 
     expect(store.photos).toHaveLength(2)
     expect(store.total).toBe(5)
-    expect(store.hasMore).toBe(true)
+    expect(store.totalPages).toBe(1)
+    expect(listPhotosMock).toHaveBeenCalledWith(expect.objectContaining({ limit: 100, offset: 0 }))
   })
 
-  it('appends the next page on loadMore and stops at the total', async () => {
-    listPhotosMock.mockResolvedValueOnce(page([1, 2], 3))
+  it('reports the page count for the selected page size', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 5575))
+    const store = useLibraryStore()
+
+    await store.reload() // default 100/page
+    expect(store.totalPages).toBe(56) // ceil(5575 / 100)
+
+    await store.setPageSize(1000)
+    expect(store.totalPages).toBe(6) // 5575 over 1000/page
+
+    await store.setPageSize(500)
+    expect(store.totalPages).toBe(12) // 5575 over 500/page
+
+    await store.setPageSize(250)
+    expect(store.totalPages).toBe(23) // ceil(5575 / 250)
+  })
+
+  it('nextPage advances the offset and clamps at the last page', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 250)) // 250 / 100 = 3 pages
     const store = useLibraryStore()
     await store.reload()
-    listPhotosMock.mockResolvedValueOnce(page([3], 3))
+    expect(store.totalPages).toBe(3)
 
-    await store.loadMore()
+    await store.nextPage()
+    expect(store.page).toBe(1)
+    expect(listPhotosMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: 100, offset: 100 }),
+    )
 
+    await store.nextPage()
+    expect(store.page).toBe(2)
+    await store.nextPage() // already on the last page — no change, no fetch
+    expect(store.page).toBe(2)
+    expect(listPhotosMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('prevPage does nothing on the first page', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 50))
+    const store = useLibraryStore()
+    await store.reload()
+
+    await store.prevPage()
+
+    expect(store.page).toBe(0)
+    expect(listPhotosMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('changing the page size refetches from page 0 with the new limit', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 900))
+    const store = useLibraryStore()
+    await store.reload()
+    await store.nextPage()
+
+    await store.setPageSize(500)
+
+    expect(store.page).toBe(0)
+    expect(listPhotosMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: 500, offset: 0 }),
+    )
+  })
+
+  it('"all" pages through in 1000-row chunks until the whole library is loaded', async () => {
+    // total 2500 spans three chunks; each mocked response only needs the right total.
+    listPhotosMock
+      .mockResolvedValueOnce(page([1], 2500))
+      .mockResolvedValueOnce(page([2], 2500))
+      .mockResolvedValueOnce(page([3], 2500))
+    const store = useLibraryStore()
+
+    await store.setPageSize('all')
+
+    expect(listPhotosMock).toHaveBeenCalledTimes(3)
+    expect(listPhotosMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ limit: 1000, offset: 0 }))
+    expect(listPhotosMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ limit: 1000, offset: 1000 }))
+    expect(listPhotosMock).toHaveBeenNthCalledWith(3, expect.objectContaining({ limit: 1000, offset: 2000 }))
     expect(store.photos.map((p) => p.id)).toEqual([1, 2, 3])
-    expect(store.hasMore).toBe(false)
-
-    await store.loadMore()
-    expect(listPhotosMock).toHaveBeenCalledTimes(2)
+    expect(store.totalPages).toBe(1)
   })
 
-  it('passes the offset of already-loaded photos when loading more', async () => {
-    listPhotosMock.mockResolvedValueOnce(page([1, 2], 4))
-    const store = useLibraryStore()
-    await store.reload()
-    listPhotosMock.mockResolvedValueOnce(page([3, 4], 4))
-
-    await store.loadMore()
-
-    expect(listPhotosMock).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 2 }))
-  })
-
-  it('toggling a file-type filter refetches from the start with the filter applied', async () => {
+  it('toggling a file-type filter refetches from page 0 with the filter applied', async () => {
     listPhotosMock.mockResolvedValue(page([1], 1))
     const store = useLibraryStore()
 
@@ -109,6 +163,7 @@ describe('library store', () => {
 
     expect(store.error).toContain('ECONNREFUSED')
     expect(store.photos).toHaveLength(0)
+    expect(store.total).toBe(0)
     expect(store.loading).toBe(false)
   })
 

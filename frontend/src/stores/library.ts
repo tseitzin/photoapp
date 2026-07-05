@@ -10,7 +10,11 @@ import {
 import { listFolders, type FolderNode } from '@/api/folders'
 import { groupPhotos, type GroupBy } from '@/utils/grouping'
 
-const PAGE_SIZE = 100
+export type PageSize = number | 'all'
+export const PAGE_SIZE_OPTIONS: PageSize[] = [100, 250, 500, 1000, 'all']
+// The backend caps a single response at 1000 rows; "all" pages through in
+// chunks of this size.
+const CHUNK_SIZE = 1000
 
 export interface LibraryFilters {
   types: string[]
@@ -22,8 +26,10 @@ export const useLibraryStore = defineStore('library', () => {
   const photos = ref<PhotoRead[]>([])
   const total = ref(0)
   const loading = ref(false)
-  const loadingMore = ref(false)
   const error = ref<string | null>(null)
+
+  const pageSize = ref<PageSize>(100)
+  const page = ref(0) // 0-indexed
 
   const filters = reactive<LibraryFilters>({ types: [], cameras: [], q: '' })
   const sort = ref<PhotoSort>('captured_desc')
@@ -38,7 +44,18 @@ export const useLibraryStore = defineStore('library', () => {
   const lightboxOpen = ref(false)
   const lightboxIndex = ref(0)
 
-  const hasMore = computed(() => photos.value.length < total.value)
+  const totalPages = computed(() =>
+    pageSize.value === 'all' ? 1 : Math.max(1, Math.ceil(total.value / pageSize.value)),
+  )
+  // 1-indexed inclusive range for "showing X–Y of Z".
+  const pageStart = computed(() =>
+    total.value === 0 || pageSize.value === 'all' ? Math.min(1, total.value) : page.value * pageSize.value + 1,
+  )
+  const pageEnd = computed(() =>
+    pageSize.value === 'all'
+      ? total.value
+      : Math.min(total.value, (page.value + 1) * pageSize.value),
+  )
   const sections = computed(() => groupPhotos(photos.value, groupBy.value))
   const selectedPhoto = computed(
     () => photos.value.find((p) => p.id === selectedPhotoId.value) ?? null,
@@ -64,9 +81,9 @@ export const useLibraryStore = defineStore('library', () => {
     photos: checkedTopLevel.value.reduce((sum, node) => sum + node.photo_count, 0),
   }))
 
-  async function fetchPage(offset: number): Promise<void> {
-    const page = await listPhotos({
-      limit: PAGE_SIZE,
+  function fetchChunk(limit: number, offset: number) {
+    return listPhotos({
+      limit,
       offset,
       types: filters.types,
       cameras: filters.cameras,
@@ -74,15 +91,29 @@ export const useLibraryStore = defineStore('library', () => {
       sort: sort.value,
       status: 'active',
     })
-    total.value = page.total
-    photos.value = offset === 0 ? page.items : [...photos.value, ...page.items]
   }
 
-  async function reload(): Promise<void> {
+  async function fetchCurrentPage(): Promise<void> {
     loading.value = true
     error.value = null
     try {
-      await fetchPage(0)
+      if (pageSize.value === 'all') {
+        const accumulated: PhotoRead[] = []
+        let offset = 0
+        let count = 0
+        do {
+          const chunk = await fetchChunk(CHUNK_SIZE, offset)
+          count = chunk.total
+          accumulated.push(...chunk.items)
+          offset += CHUNK_SIZE
+        } while (offset < count)
+        photos.value = accumulated
+        total.value = count
+      } else {
+        const result = await fetchChunk(pageSize.value, page.value * pageSize.value)
+        photos.value = result.items
+        total.value = result.total
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
       photos.value = []
@@ -92,16 +123,32 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  async function loadMore(): Promise<void> {
-    if (loading.value || loadingMore.value || !hasMore.value) return
-    loadingMore.value = true
-    try {
-      await fetchPage(photos.value.length)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
-    } finally {
-      loadingMore.value = false
-    }
+  /** Reset to the first page and refetch — used after any filter/sort change. */
+  async function reload(): Promise<void> {
+    page.value = 0
+    await fetchCurrentPage()
+  }
+
+  async function goToPage(target: number): Promise<void> {
+    const clamped = Math.max(0, Math.min(target, totalPages.value - 1))
+    if (clamped === page.value) return
+    page.value = clamped
+    await fetchCurrentPage()
+  }
+
+  function nextPage(): Promise<void> {
+    return goToPage(page.value + 1)
+  }
+
+  function prevPage(): Promise<void> {
+    return goToPage(page.value - 1)
+  }
+
+  async function setPageSize(value: PageSize): Promise<void> {
+    if (value === pageSize.value) return
+    pageSize.value = value
+    page.value = 0
+    await fetchCurrentPage()
   }
 
   async function loadFolders(): Promise<void> {
@@ -186,20 +233,23 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   function lightboxStep(delta: 1 | -1): void {
+    // The lightbox navigates within the currently loaded page of photos.
     const next = lightboxIndex.value + delta
     if (next < 0 || next >= photos.value.length) return
     lightboxIndex.value = next
     selectedPhotoId.value = photos.value[next]!.id
-    // Keep the runway ahead of the user when paging forward.
-    if (delta === 1 && photos.value.length - next < 20) void loadMore()
   }
 
   return {
     photos,
     total,
     loading,
-    loadingMore,
     error,
+    pageSize,
+    page,
+    totalPages,
+    pageStart,
+    pageEnd,
     filters,
     sort,
     groupBy,
@@ -217,12 +267,14 @@ export const useLibraryStore = defineStore('library', () => {
     openLightbox,
     closeLightbox,
     lightboxStep,
-    hasMore,
     sections,
     hasActiveFilters,
     init,
     reload,
-    loadMore,
+    goToPage,
+    nextPage,
+    prevPage,
+    setPageSize,
     toggleExpanded,
     toggleChecked,
     toggleType,

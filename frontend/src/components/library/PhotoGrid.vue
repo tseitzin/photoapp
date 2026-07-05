@@ -1,27 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { thumbnailUrl } from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
 import { formatCount } from '@/utils/format'
 
 const store = useLibraryStore()
 const emit = defineEmits<{ open: [photoId: number] }>()
-
-const sentinel = ref<HTMLElement | null>(null)
-let observer: IntersectionObserver | null = null
-
-onMounted(() => {
-  if (typeof IntersectionObserver === 'undefined') return
-  observer = new IntersectionObserver(
-    (entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) void store.loadMore()
-    },
-    { rootMargin: '600px' },
-  )
-  if (sentinel.value) observer.observe(sentinel.value)
-})
-
-onBeforeUnmount(() => observer?.disconnect())
 
 function onTileClick(photoId: number): void {
   store.selectPhoto(photoId)
@@ -51,8 +34,6 @@ function onTileClick(photoId: number): void {
         </button>
       </div>
     </section>
-    <div ref="sentinel" class="sentinel" aria-hidden="true" />
-    <p v-if="store.loadingMore" class="loading-more">Loading more…</p>
   </div>
 </template>
 
@@ -124,15 +105,5 @@ function onTileClick(photoId: number): void {
   /* keep the inset ring visible above the image */
   mix-blend-mode: normal;
   opacity: 0.92;
-}
-
-.sentinel {
-  height: 1px;
-}
-
-.loading-more {
-  text-align: center;
-  color: var(--muted);
-  padding: 12px 0;
 }
 </style>

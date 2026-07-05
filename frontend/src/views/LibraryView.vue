@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import type { PhotoSort } from '@/api/photos'
 import FilterPanel from '@/components/library/FilterPanel.vue'
 import FolderTree from '@/components/library/FolderTree.vue'
 import PhotoGrid from '@/components/library/PhotoGrid.vue'
 import PhotoLightbox from '@/components/library/PhotoLightbox.vue'
-import { useLibraryStore } from '@/stores/library'
+import { PAGE_SIZE_OPTIONS, useLibraryStore, type PageSize } from '@/stores/library'
 import { formatCount } from '@/utils/format'
 
 const store = useLibraryStore()
+const gridScroll = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   if (!store.photos.length) void store.init()
@@ -22,6 +23,20 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
   { value: 'size_desc', label: 'File size ↓' },
   { value: 'size_asc', label: 'File size ↑' },
 ]
+
+function pageSizeLabel(size: PageSize): string {
+  return size === 'all' ? 'All' : String(size)
+}
+
+function parsePageSize(raw: string): PageSize {
+  return raw === 'all' ? 'all' : Number(raw)
+}
+
+/** Run a page change, then return the grid to the top so the new page is visible. */
+async function withScrollReset(action: () => Promise<void>): Promise<void> {
+  await action()
+  gridScroll.value?.scrollTo({ top: 0 })
+}
 </script>
 
 <template>
@@ -47,6 +62,22 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
             </option>
           </select>
         </label>
+        <label class="control">
+          Show
+          <select
+            class="select"
+            :value="String(store.pageSize)"
+            @change="
+              withScrollReset(() =>
+                store.setPageSize(parsePageSize(($event.target as HTMLSelectElement).value)),
+              )
+            "
+          >
+            <option v-for="option in PAGE_SIZE_OPTIONS" :key="String(option)" :value="String(option)">
+              {{ pageSizeLabel(option) }}
+            </option>
+          </select>
+        </label>
         <input
           v-model.number="store.tileSize"
           class="size-slider"
@@ -57,7 +88,7 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
         />
       </div>
 
-      <div class="grid-scroll">
+      <div ref="gridScroll" class="grid-scroll">
         <div v-if="store.loading" class="skeleton" aria-label="Loading photos">
           <div class="skeleton-header" />
           <div class="skeleton-grid">
@@ -82,6 +113,38 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
         </div>
         <PhotoGrid v-else @open="store.openLightbox($event)" />
       </div>
+
+      <footer
+        v-if="!store.loading && !store.error && store.total > 0"
+        class="pagination"
+      >
+        <span class="page-info">
+          Showing {{ formatCount(store.pageStart) }}–{{ formatCount(store.pageEnd) }} of
+          {{ formatCount(store.total) }}
+        </span>
+        <span class="spacer" />
+        <template v-if="store.pageSize !== 'all' && store.totalPages > 1">
+          <button
+            type="button"
+            class="page-btn"
+            :disabled="store.page === 0"
+            @click="withScrollReset(() => store.prevPage())"
+          >
+            ← Prev
+          </button>
+          <span class="page-indicator">
+            Page {{ formatCount(store.page + 1) }} of {{ formatCount(store.totalPages) }}
+          </span>
+          <button
+            type="button"
+            class="page-btn"
+            :disabled="store.page >= store.totalPages - 1"
+            @click="withScrollReset(() => store.nextPage())"
+          >
+            Next →
+          </button>
+        </template>
+      </footer>
     </section>
 
     <FilterPanel />
@@ -162,6 +225,43 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.pagination {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: var(--bar);
+  border-top: 1px solid var(--border);
+}
+
+.page-info {
+  font-size: 12px;
+  color: var(--sub);
+}
+
+.page-indicator {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.page-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .state {

@@ -38,7 +38,7 @@ Repository = Annotated[PhotoRepository, Depends(get_repository)]
 @router.get("")
 def list_photos(
     repository: Repository,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     status: PhotoStatus | None = None,
     folder: Annotated[str | None, Query(description="Directory path; recursive")] = None,
