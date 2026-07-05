@@ -6,7 +6,13 @@ import { formatCount } from '@/utils/format'
 const store = useLibraryStore()
 const emit = defineEmits<{ open: [photoId: number] }>()
 
-function onTileClick(photoId: number): void {
+// Single click selects (details show in the right panel); double-click opens
+// the full-screen lightbox.
+function onTileSelect(photoId: number): void {
+  store.selectPhoto(photoId)
+}
+
+function onTileOpen(photoId: number): void {
   store.selectPhoto(photoId)
   emit('open', photoId)
 }
@@ -28,7 +34,9 @@ function onTileClick(photoId: number): void {
           class="tile"
           :class="{ 'tile--selected': photo.id === store.selectedPhotoId }"
           :aria-label="photo.filename"
-          @click="onTileClick(photo.id)"
+          :title="`${photo.filename} — double-click to open`"
+          @click="onTileSelect(photo.id)"
+          @dblclick="onTileOpen(photo.id)"
         >
           <img :src="thumbnailUrl(photo.id)" :alt="photo.filename" loading="lazy" />
         </button>

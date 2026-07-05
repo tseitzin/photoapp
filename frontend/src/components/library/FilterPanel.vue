@@ -74,9 +74,15 @@ const metadataRows = computed(() => {
 
       <p class="label">METADATA</p>
       <template v-if="store.selectedPhoto">
-        <div class="preview">
+        <button
+          type="button"
+          class="preview"
+          title="Open full size"
+          @click="store.openLightbox(store.selectedPhoto.id)"
+        >
           <img :src="thumbnailUrl(store.selectedPhoto.id)" :alt="store.selectedPhoto.filename" />
-        </div>
+          <span class="preview-hint">Open full size ↗</span>
+        </button>
         <p class="filename">{{ store.selectedPhoto.filename }}</p>
         <dl class="meta">
           <template v-for="row in metadataRows" :key="row.key">
@@ -200,11 +206,33 @@ const metadataRows = computed(() => {
 }
 
 .preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
   aspect-ratio: 3 / 2;
   border-radius: 8px;
   overflow: hidden;
   background: var(--skeleton);
   margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.preview-hint {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  color: #fff;
+  background: rgba(9, 9, 11, 0.55);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.preview:hover .preview-hint,
+.preview:focus-visible .preview-hint {
+  opacity: 1;
 }
 
 .preview img {
