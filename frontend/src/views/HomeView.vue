@@ -59,6 +59,16 @@ onMounted(async () => {
         <p class="stat-value">{{ stats ? formatCount(stats.missing) : '—' }}</p>
         <p class="stat-sub">files gone from disk</p>
       </div>
+      <div class="stat-card">
+        <p class="stat-label">DELETED</p>
+        <p class="stat-value">{{ stats ? formatCount(stats.deleted_count) : '—' }}</p>
+        <p class="stat-sub">removed all-time</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">SPACE SAVED</p>
+        <p class="stat-value">{{ stats ? formatBytes(stats.space_saved_bytes) : '—' }}</p>
+        <p class="stat-sub">reclaimed by deletion</p>
+      </div>
     </div>
 
     <div class="entries">
@@ -142,7 +152,7 @@ onMounted(async () => {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 14px;
   margin-bottom: 26px;
 }
@@ -295,15 +305,14 @@ onMounted(async () => {
   display: block;
 }
 
+/* .stats uses auto-fit, so it reflows on its own; only .entries needs help. */
 @media (max-width: 900px) {
-  .stats,
   .entries {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 560px) {
-  .stats,
   .entries {
     grid-template-columns: 1fr;
   }

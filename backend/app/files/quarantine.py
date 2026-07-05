@@ -63,9 +63,24 @@ class FileManagementService:
         photos = self._session.scalars(select(Photo).where(Photo.id.in_(photo_ids))).all()
         return {photo.id: photo for photo in photos}
 
-    def _audit(self, photo_id: int, op: str, src: str, dest: str | None, batch_id: str) -> None:
+    def _audit(
+        self,
+        photo_id: int,
+        op: str,
+        src: str,
+        dest: str | None,
+        batch_id: str,
+        size_bytes: int,
+    ) -> None:
         self._session.add(
-            FileOperation(photo_id=photo_id, op=op, src_path=src, dest_path=dest, batch_id=batch_id)
+            FileOperation(
+                photo_id=photo_id,
+                op=op,
+                src_path=src,
+                dest_path=dest,
+                batch_id=batch_id,
+                size_bytes=size_bytes,
+            )
         )
 
     def _quarantine_slot(self, source: Path) -> Path:
@@ -138,7 +153,7 @@ class FileManagementService:
                 results.append(ItemResult(photo_id, ok=False, error=str(exc)))
                 continue
             photo.status = "quarantined"
-            self._audit(photo_id, "quarantine", str(source), str(dest), batch_id)
+            self._audit(photo_id, "quarantine", str(source), str(dest), batch_id, photo.size_bytes)
             results.append(ItemResult(photo_id, ok=True))
             logger.info("quarantined %s -> %s", source, dest)
 
@@ -179,7 +194,7 @@ class FileManagementService:
                 results.append(ItemResult(photo_id, ok=False, error=str(exc)))
                 continue
             photo.status = "active"
-            self._audit(photo_id, "restore", str(source), str(dest), batch_id)
+            self._audit(photo_id, "restore", str(source), str(dest), batch_id, photo.size_bytes)
             results.append(ItemResult(photo_id, ok=True))
             logger.info("restored %s -> %s", source, dest)
 
@@ -224,9 +239,10 @@ class FileManagementService:
             except (PathValidationError, OSError) as exc:
                 results.append(ItemResult(photo_id, ok=False, error=str(exc)))
                 continue
-            self._audit(photo_id, "delete", str(target), None, batch_id)
+            self._audit(photo_id, "delete", str(target), None, batch_id, photo.size_bytes)
             # The file no longer exists anywhere; drop the index row. The audit
-            # row keeps the paths (photo_id becomes NULL via FK).
+            # row keeps the path and size (photo_id becomes NULL via FK), so the
+            # lifetime "space reclaimed" tally survives.
             self._session.delete(photo)
             results.append(ItemResult(photo_id, ok=True))
             logger.warning("permanently deleted %s", target)

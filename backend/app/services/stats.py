@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Photo, Scan
+from app.models import FileOperation, Photo, Scan
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,10 @@ class LibraryStats:
     duplicate_photos: int
     reclaimable_bytes: int
     last_scan_at: datetime | None
+    # Lifetime tallies from the append-only audit log — survive rescans and
+    # even wiping/rebuilding the whole library.
+    deleted_count: int
+    space_saved_bytes: int
 
 
 def compute_stats(session: Session) -> LibraryStats:
@@ -59,6 +63,16 @@ def compute_stats(session: Session) -> LibraryStats:
         select(func.max(Scan.finished_at)).where(Scan.status == "completed")
     )
 
+    # Lifetime deletion tally over permanently-deleted files. size_bytes is
+    # null only for deletes recorded before this was tracked, so the count is
+    # exact while the byte total accrues from here forward.
+    deleted_count, space_saved = session.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(FileOperation.size_bytes), 0),
+        ).where(FileOperation.op == "delete")
+    ).one()
+
     return LibraryStats(
         photos=photos,
         storage_bytes=int(storage or 0),
@@ -67,4 +81,6 @@ def compute_stats(session: Session) -> LibraryStats:
         duplicate_photos=int(duplicate_photos),
         reclaimable_bytes=int(reclaimable),
         last_scan_at=last_scan_at,
+        deleted_count=int(deleted_count),
+        space_saved_bytes=int(space_saved),
     )
