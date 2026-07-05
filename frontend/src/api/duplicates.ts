@@ -70,6 +70,11 @@ export function dismissGroup(groupId: number): Promise<DuplicateGroup> {
   return requestJson<DuplicateGroup>(`/api/duplicates/groups/${groupId}/dismiss`, 'POST', {})
 }
 
+/** Return a reviewed/dismissed group to 'pending', clearing its decisions. */
+export function reopenGroup(groupId: number): Promise<DuplicateGroup> {
+  return requestJson<DuplicateGroup>(`/api/duplicates/groups/${groupId}/reopen`, 'POST', {})
+}
+
 export function getDuplicateSummary(): Promise<DuplicateSummary> {
   return request<DuplicateSummary>('/api/duplicates/summary')
 }

@@ -162,3 +162,18 @@ class DuplicateService:
         group.status = "dismissed"
         self._session.commit()
         return group
+
+    def reopen(self, group_id: int) -> DuplicateGroup:
+        """Return a reviewed or dismissed group to 'pending' for another look.
+
+        Decisions are cleared so the review flow presents every pair fresh.
+        Safe: quarantine/deletion is a separate step, so a 'reviewed' group
+        still has all its files on disk.
+        """
+        group = self.get_group(group_id)
+        for decision in list(group.decisions):
+            self._session.delete(decision)
+        group.status = "pending"
+        self._session.commit()
+        self._session.refresh(group)
+        return group

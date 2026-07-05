@@ -5,6 +5,7 @@ import {
   dismissGroup,
   getDuplicateSummary,
   listGroups,
+  reopenGroup,
   type DuplicateGroup,
   type DuplicateKind,
   type DuplicateMember,
@@ -171,6 +172,18 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     }
   }
 
+  /** Undo a review/dismissal, returning the group to 'pending'. Pass
+   *  andReview to jump straight back into reviewing it. */
+  async function reopen(groupId: number, andReview = false): Promise<void> {
+    try {
+      await reopenGroup(groupId)
+      await load()
+      if (andReview) startReview(groupId)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+
   return {
     groups,
     total,
@@ -190,5 +203,6 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     skip,
     stopReview,
     dismiss,
+    reopen,
   }
 })

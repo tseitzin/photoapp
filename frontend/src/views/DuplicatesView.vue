@@ -90,21 +90,29 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
           </p>
         </div>
         <div class="card-actions">
+          <template v-if="group.status === 'pending'">
+            <button type="button" class="btn btn--primary" @click="store.startReview(group.id)">
+              Review
+            </button>
+            <button type="button" class="btn" @click="store.dismiss(group.id)">
+              Not duplicates
+            </button>
+          </template>
           <button
-            v-if="group.status === 'pending'"
+            v-else-if="group.status === 'reviewed'"
             type="button"
             class="btn btn--primary"
-            @click="store.startReview(group.id)"
+            @click="store.reopen(group.id, true)"
           >
-            Review
+            Review again
           </button>
           <button
-            v-if="group.status === 'pending'"
+            v-else-if="group.status === 'dismissed'"
             type="button"
             class="btn"
-            @click="store.dismiss(group.id)"
+            @click="store.reopen(group.id)"
           >
-            Not duplicates
+            Reopen
           </button>
         </div>
       </article>

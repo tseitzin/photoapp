@@ -62,6 +62,11 @@ def dismiss(group_id: int, service: Service) -> DuplicateGroupRead:
     return DuplicateGroupRead.from_group(service.dismiss(group_id))
 
 
+@router.post("/groups/{group_id}/reopen")
+def reopen(group_id: int, service: Service) -> DuplicateGroupRead:
+    return DuplicateGroupRead.from_group(service.reopen(group_id))
+
+
 @router.get("/marked")
 def list_marked_for_removal(db: Annotated[Session, Depends(get_db)]) -> list[PhotoRead]:
     """Active photos the user has marked 'remove' — the quarantine work-list."""

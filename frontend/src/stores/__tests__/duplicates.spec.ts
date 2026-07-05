@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useDuplicatesStore } from '../duplicates'
-import { decideGroup, listGroups } from '@/api/duplicates'
+import { decideGroup, listGroups, reopenGroup } from '@/api/duplicates'
 import type { DuplicateGroup, DuplicateGroupPage, DuplicateSummary } from '@/api/duplicates'
 import type { PhotoRead } from '@/api/photos'
 
@@ -9,6 +9,7 @@ vi.mock('@/api/duplicates', () => ({
   listGroups: vi.fn<() => Promise<DuplicateGroupPage>>(),
   decideGroup: vi.fn<() => Promise<unknown>>().mockResolvedValue({}),
   dismissGroup: vi.fn<() => Promise<unknown>>(),
+  reopenGroup: vi.fn<() => Promise<unknown>>().mockResolvedValue({}),
   getDuplicateSummary: vi.fn<() => Promise<DuplicateSummary>>().mockResolvedValue({
     groups: 1,
     pending_groups: 1,
@@ -24,6 +25,7 @@ vi.mock('@/api/duplicates', () => ({
 
 const listGroupsMock = vi.mocked(listGroups)
 const decideGroupMock = vi.mocked(decideGroup)
+const reopenGroupMock = vi.mocked(reopenGroup)
 
 function photo(id: number, size = 1000): PhotoRead {
   return {
@@ -78,6 +80,49 @@ describe('duplicates store review flow', () => {
     listGroupsMock.mockReset()
     decideGroupMock.mockReset()
     decideGroupMock.mockResolvedValue({} as DuplicateGroup)
+    reopenGroupMock.mockReset()
+    reopenGroupMock.mockResolvedValue({} as DuplicateGroup)
+  })
+
+  it('reopen un-reviews a group and can jump straight back into reviewing it', async () => {
+    const reviewed = group(1, [10, 11], 10)
+    reviewed.status = 'reviewed'
+    reviewed.members[0]!.decision = 'keep'
+    reviewed.members[1]!.decision = 'remove'
+    const store = await loadedStore([reviewed])
+
+    // After reopen, the reload returns the group back in 'pending' with no decisions.
+    listGroupsMock.mockResolvedValue({
+      items: [group(1, [10, 11], 10)],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+
+    await store.reopen(1, true)
+
+    expect(reopenGroupMock).toHaveBeenCalledWith(1)
+    expect(store.reviewing).toBe(true)
+    expect(store.currentPair?.group.id).toBe(1)
+    expect(store.currentPair?.a.photo.id).toBe(10)
+  })
+
+  it('reopen without review just refreshes the list', async () => {
+    const dismissed = group(3, [30, 31], 30)
+    dismissed.status = 'dismissed'
+    const store = await loadedStore([dismissed])
+    listGroupsMock.mockResolvedValue({
+      items: [group(3, [30, 31], 30)],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+
+    await store.reopen(3)
+
+    expect(reopenGroupMock).toHaveBeenCalledWith(3)
+    expect(store.reviewing).toBe(false)
+    expect(store.groups[0]!.status).toBe('pending')
   })
 
   it('builds the pair queue keeper-vs-member across pending groups', async () => {

@@ -39,6 +39,54 @@ def test_scan_builds_exact_group_with_keeper_and_members(
     assert group["reclaimable_bytes"] == 2 * group["members"][0]["photo"]["size_bytes"]
 
 
+def test_reopen_returns_reviewed_group_to_pending_and_clears_decisions(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _make_dupes(tmp_path, copies=2)
+    _index(client, tmp_path)
+    group = client.get("/api/duplicates/groups").json()["items"][0]
+    keeper = group["keeper_photo_id"]
+    other = next(m["photo"]["id"] for m in group["members"] if m["photo"]["id"] != keeper)
+    client.post(
+        f"/api/duplicates/groups/{group['id']}/decisions",
+        json={
+            "decisions": [
+                {"photo_id": keeper, "decision": "keep"},
+                {"photo_id": other, "decision": "remove"},
+            ]
+        },
+    )
+    assert client.get(f"/api/duplicates/groups/{group['id']}").json()["status"] == "reviewed"
+
+    reopened = client.post(f"/api/duplicates/groups/{group['id']}/reopen")
+
+    assert reopened.status_code == 200
+    body = reopened.json()
+    assert body["status"] == "pending"
+    assert all(m["decision"] is None for m in body["members"])
+    # The photo that had been marked for removal is no longer in the work-list.
+    assert client.get("/api/duplicates/marked").json() == []
+
+
+def test_reopen_a_dismissed_group_makes_it_reviewable_again(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _make_dupes(tmp_path, copies=2)
+    _index(client, tmp_path)
+    group = client.get("/api/duplicates/groups").json()["items"][0]
+    client.post(f"/api/duplicates/groups/{group['id']}/dismiss")
+    assert client.get(f"/api/duplicates/groups/{group['id']}").json()["status"] == "dismissed"
+
+    reopened = client.post(f"/api/duplicates/groups/{group['id']}/reopen")
+
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "pending"
+
+
+def test_reopen_unknown_group_is_404(client: TestClient) -> None:
+    assert client.post("/api/duplicates/groups/98765/reopen").status_code == 404
+
+
 def test_rescan_preserves_group_identity_and_review_state(
     client: TestClient, tmp_path: Path
 ) -> None:
