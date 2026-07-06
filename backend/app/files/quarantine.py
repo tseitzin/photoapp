@@ -153,6 +153,7 @@ class FileManagementService:
                 results.append(ItemResult(photo_id, ok=False, error=str(exc)))
                 continue
             photo.status = "quarantined"
+            photo.marked_for_deletion = False  # the mark has been acted on
             self._audit(photo_id, "quarantine", str(source), str(dest), batch_id, photo.size_bytes)
             results.append(ItemResult(photo_id, ok=True))
             logger.info("quarantined %s -> %s", source, dest)

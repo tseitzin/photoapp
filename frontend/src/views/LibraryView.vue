@@ -49,6 +49,9 @@ async function withScrollReset(action: () => Promise<void>): Promise<void> {
       <div class="subheader">
         <span class="breadcrumb">All photos</span>
         <span class="total">{{ formatCount(store.total) }} photos</span>
+        <RouterLink v-if="store.markedOnPage > 0" to="/quarantine" class="marked-link">
+          🗑 {{ formatCount(store.markedOnPage) }} marked · review →
+        </RouterLink>
         <span class="spacer" />
         <label class="control">
           Sort
@@ -193,6 +196,16 @@ async function withScrollReset(action: () => Promise<void>): Promise<void> {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted);
+}
+
+.marked-link {
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--danger);
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
 }
 
 .spacer {

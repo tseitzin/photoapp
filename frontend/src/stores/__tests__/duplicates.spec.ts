@@ -42,6 +42,7 @@ function photo(id: number, size = 1000): PhotoRead {
     camera_make: null,
     camera_model: null,
     status: 'active',
+    marked_for_deletion: false,
     created_at: '2026-01-01T00:00:00Z',
   }
 }
@@ -176,6 +177,35 @@ describe('duplicates store review flow', () => {
       { photo_id: 11, decision: 'keep' },
     ])
     expect(store.freedBytes).toBe(0)
+  })
+
+  it('remove both marks both for removal with force and frees both sizes', async () => {
+    const store = await loadedStore([group(1, [10, 11], 10)])
+    store.startReview()
+
+    await store.decide('remove_both')
+
+    expect(decideGroupMock).toHaveBeenCalledWith(
+      1,
+      [
+        { photo_id: 10, decision: 'remove' },
+        { photo_id: 11, decision: 'remove' },
+      ],
+      true,
+    )
+    expect(store.freedBytes).toBe(2100) // sizes 1000 + 1100
+    expect(store.reviewing).toBe(false) // the 2-photo group is fully resolved
+  })
+
+  it('remove both in a 3-photo group re-anchors on the surviving member', async () => {
+    const store = await loadedStore([group(1, [10, 11, 12], 10)])
+    store.startReview()
+
+    await store.decide('remove_both') // removes 10 (keeper) and 11
+
+    // 12 becomes the survivor; nothing left to pair, so review ends
+    expect(store.reviewing).toBe(false)
+    expect(store.freedBytes).toBe(2100)
   })
 
   it('finishing the last pair exits review mode', async () => {

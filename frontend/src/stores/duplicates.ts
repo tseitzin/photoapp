@@ -14,7 +14,7 @@ import {
 
 const PAGE_SIZE = 50
 
-export type PairChoice = 'keep_a' | 'keep_b' | 'keep_both'
+export type PairChoice = 'keep_a' | 'keep_b' | 'keep_both' | 'remove_both'
 
 interface ReviewItem {
   group: DuplicateGroup
@@ -107,34 +107,37 @@ export const useDuplicatesStore = defineStore('duplicates', () => {
     if (!pair || !item) return
     const { a, b } = pair
 
-    const decisions =
-      choice === 'keep_a'
-        ? [
-            { photo_id: a.photo.id, decision: 'keep' as const },
-            { photo_id: b.photo.id, decision: 'remove' as const },
-          ]
-        : choice === 'keep_b'
-          ? [
-              { photo_id: a.photo.id, decision: 'remove' as const },
-              { photo_id: b.photo.id, decision: 'keep' as const },
-            ]
-          : [
-              { photo_id: a.photo.id, decision: 'keep' as const },
-              { photo_id: b.photo.id, decision: 'keep' as const },
-            ]
+    const decisionByChoice: Record<PairChoice, ['keep' | 'remove', 'keep' | 'remove']> = {
+      keep_a: ['keep', 'remove'],
+      keep_b: ['remove', 'keep'],
+      keep_both: ['keep', 'keep'],
+      remove_both: ['remove', 'remove'],
+    }
+    const [decA, decB] = decisionByChoice[choice]
+    const decisions = [
+      { photo_id: a.photo.id, decision: decA },
+      { photo_id: b.photo.id, decision: decB },
+    ]
     try {
-      await decideGroup(item.group.id, decisions)
+      // remove_both may mark every member of a 2-photo group — force past the guard.
+      await (choice === 'remove_both'
+        ? decideGroup(item.group.id, decisions, true)
+        : decideGroup(item.group.id, decisions))
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
       return
     }
 
-    if (choice === 'keep_a') freedBytes.value += b.photo.size_bytes
-    if (choice === 'keep_b') {
-      freedBytes.value += a.photo.size_bytes
-      item.keeperId = b.photo.id // the survivor anchors the remaining pairs
-    }
+    if (decB === 'remove') freedBytes.value += b.photo.size_bytes
+    if (decA === 'remove') freedBytes.value += a.photo.size_bytes
     item.remaining = item.remaining.filter((id) => id !== b.photo.id)
+    if (choice === 'keep_b') {
+      item.keeperId = b.photo.id // the survivor anchors the remaining pairs
+    } else if (choice === 'remove_both' && item.remaining.length > 0) {
+      // both shown photos are gone; re-anchor to the next remaining member
+      item.keeperId = item.remaining[0]!
+      item.remaining = item.remaining.slice(1)
+    }
     resolvedPairs.value += 1
     if (!currentPair.value) {
       reviewing.value = false

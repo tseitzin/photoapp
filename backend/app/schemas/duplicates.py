@@ -67,6 +67,9 @@ class DecisionWrite(BaseModel):
 
 class DecisionsWrite(BaseModel):
     decisions: list[DecisionWrite]
+    # Allow marking every member of the group for removal (needs a strong
+    # confirmation in the UI). Without it, the service keeps at least one.
+    force: bool = False
 
 
 class DuplicateSummary(BaseModel):

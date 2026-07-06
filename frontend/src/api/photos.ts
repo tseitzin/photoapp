@@ -1,4 +1,4 @@
-import { API_BASE_URL, request } from './client'
+import { API_BASE_URL, request, requestJson } from './client'
 
 export type PhotoStatus = 'active' | 'missing' | 'quarantined'
 export type PhotoSort =
@@ -24,6 +24,7 @@ export interface PhotoRead {
   camera_make: string | null
   camera_model: string | null
   status: PhotoStatus
+  marked_for_deletion: boolean
   created_at: string
 }
 
@@ -83,6 +84,14 @@ export function getPhoto(id: number): Promise<PhotoDetail> {
 
 export function getFacets(): Promise<Facets> {
   return request<Facets>('/api/photos/facets')
+}
+
+export function markPhotos(photoIds: number[]): Promise<{ marked: boolean; affected: number }> {
+  return requestJson('/api/photos/mark', 'POST', { photo_ids: photoIds })
+}
+
+export function unmarkPhotos(photoIds: number[]): Promise<{ marked: boolean; affected: number }> {
+  return requestJson('/api/photos/unmark', 'POST', { photo_ids: photoIds })
 }
 
 export function thumbnailUrl(id: number): string {

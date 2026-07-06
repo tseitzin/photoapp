@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import QuarantineView from '../QuarantineView.vue'
+import { listMarkedForRemoval } from '@/api/duplicates'
+import { quarantinePhotos } from '@/api/files'
+import { listPhotos } from '@/api/photos'
 import type { PhotoRead } from '@/api/photos'
 
-function photo(id: number): PhotoRead {
+function photo(id: number, status: PhotoRead['status'] = 'quarantined'): PhotoRead {
   return {
     id,
     root_id: 1,
@@ -18,7 +21,8 @@ function photo(id: number): PhotoRead {
     captured_at: null,
     camera_make: null,
     camera_model: null,
-    status: 'quarantined',
+    status,
+    marked_for_deletion: false,
     created_at: '2026-01-01T00:00:00Z',
   }
 }
@@ -88,5 +92,47 @@ describe('QuarantineView select all', () => {
     }
     const restore = wrapper.findAll('button').find((b) => b.text().startsWith('Restore selected'))
     expect(restore?.attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('QuarantineView quarantine action refreshes the sections', () => {
+  const markedMock = vi.mocked(listMarkedForRemoval)
+  const listPhotosMock = vi.mocked(listPhotos)
+  const quarantineMock = vi.mocked(quarantinePhotos)
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    markedMock.mockReset()
+    listPhotosMock.mockReset()
+    quarantineMock.mockReset()
+  })
+
+  it('moves photos into "In quarantine" without a manual refresh', async () => {
+    // initial load: one photo marked for removal, quarantine empty
+    markedMock.mockResolvedValueOnce([photo(1, 'active')])
+    listPhotosMock.mockResolvedValueOnce({ items: [], total: 0, limit: 1000, offset: 0 })
+    quarantineMock.mockResolvedValue({ batch_id: 'b', succeeded: 1, failed: 0, results: [] })
+    // reload after quarantining: nothing marked, one quarantined
+    markedMock.mockResolvedValueOnce([])
+    listPhotosMock.mockResolvedValueOnce({
+      items: [photo(1, 'quarantined')],
+      total: 1,
+      limit: 1000,
+      offset: 0,
+    })
+
+    const wrapper = await mountLoaded()
+    expect(wrapper.text()).toContain('Quarantine 1 photos')
+    expect(wrapper.text()).toContain('Quarantine is empty.')
+
+    // click "Quarantine N photos…" then confirm in the dialog
+    await wrapper.get('.card .btn--primary').trigger('click')
+    await wrapper.get('.backdrop .btn--primary').trigger('click')
+    await flushPromises()
+
+    expect(quarantineMock).toHaveBeenCalledWith([1], false)
+    expect(wrapper.text()).not.toContain('Quarantine is empty.')
+    expect(wrapper.findAll('.row--selectable')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Nothing marked')
   })
 })

@@ -74,6 +74,15 @@ watch(
         {{ formatCount(store.lightboxIndex + 1) }} / {{ formatCount(store.total) }}
       </span>
       <span class="spacer" />
+      <button
+        type="button"
+        class="mark-btn"
+        :class="{ 'mark-btn--on': store.lightboxPhoto.marked_for_deletion }"
+        :aria-pressed="store.lightboxPhoto.marked_for_deletion"
+        @click="store.toggleMark(store.lightboxPhoto.id)"
+      >
+        🗑 {{ store.lightboxPhoto.marked_for_deletion ? 'Marked for deletion' : 'Mark for deletion' }}
+      </button>
       <button type="button" class="icon-btn" aria-label="Close" @click="store.closeLightbox()">
         ×
       </button>
@@ -175,6 +184,23 @@ watch(
   color: inherit;
   font-size: 17px;
   cursor: pointer;
+}
+
+.mark-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #3a3a41;
+  background: transparent;
+  color: #e7e7ea;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mark-btn--on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .stage {

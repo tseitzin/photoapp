@@ -13,6 +13,8 @@ from app.scanner.thumbnails import ensure_thumbnail
 from app.schemas.photos import (
     FacetsRead,
     FacetValue,
+    MarkRequest,
+    MarkResult,
     PhotoDetail,
     PhotoPage,
     PhotoRead,
@@ -63,6 +65,22 @@ def list_photos(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/marked")
+def list_marked_for_removal(repository: Repository) -> list[PhotoRead]:
+    """Active photos flagged for deletion — the quarantine work-list."""
+    return [PhotoRead.model_validate(photo) for photo in repository.list_marked_for_removal()]
+
+
+@router.post("/mark")
+def mark_photos(body: MarkRequest, repository: Repository) -> MarkResult:
+    return MarkResult(marked=True, affected=repository.set_marked(body.photo_ids, marked=True))
+
+
+@router.post("/unmark")
+def unmark_photos(body: MarkRequest, repository: Repository) -> MarkResult:
+    return MarkResult(marked=False, affected=repository.set_marked(body.photo_ids, marked=False))
 
 
 @router.get("/facets")

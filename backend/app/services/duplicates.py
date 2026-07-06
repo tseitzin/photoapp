@@ -134,7 +134,9 @@ class DuplicateService:
             raise NotFoundError(f"Duplicate group {group_id} not found")
         return group
 
-    def decide(self, group_id: int, decisions: list[tuple[int, str]]) -> DuplicateGroup:
+    def decide(
+        self, group_id: int, decisions: list[tuple[int, str]], force: bool = False
+    ) -> DuplicateGroup:
         group = self.get_group(group_id)
         member_ids = {member.photo_id for member in group.members}
         for photo_id, decision in decisions:
@@ -143,11 +145,13 @@ class DuplicateService:
             if decision not in (*DECISIONS, "undecided"):
                 raise ValidationFailedError(f"Unknown decision: {decision}")
         if (
-            all(decision == "remove" for _, decision in decisions)
+            not force
+            and all(decision == "remove" for _, decision in decisions)
             and {photo_id for photo_id, _ in decisions} == member_ids
         ):
             raise ValidationFailedError(
-                "Refusing to mark every photo in the group for removal — keep at least one"
+                "Refusing to mark every photo in the group for removal — keep at least one "
+                "(pass force to remove them all)"
             )
 
         self._repo.apply_decisions(group, decisions)

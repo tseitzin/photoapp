@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useLibraryStore } from '../library'
-import { listPhotos } from '@/api/photos'
+import { listPhotos, markPhotos, unmarkPhotos } from '@/api/photos'
 import type { PhotoPage, PhotoRead } from '@/api/photos'
 
 vi.mock('@/api/photos', () => ({
@@ -9,6 +9,8 @@ vi.mock('@/api/photos', () => ({
   getFacets: vi
     .fn<() => Promise<{ file_types: never[]; cameras: never[] }>>()
     .mockResolvedValue({ file_types: [], cameras: [] }),
+  markPhotos: vi.fn<() => Promise<unknown>>().mockResolvedValue({ marked: true, affected: 1 }),
+  unmarkPhotos: vi.fn<() => Promise<unknown>>().mockResolvedValue({ marked: false, affected: 1 }),
   thumbnailUrl: (id: number) => `/thumb/${id}`,
   previewUrl: (id: number) => `/preview/${id}`,
 }))
@@ -17,6 +19,8 @@ vi.mock('@/api/folders', () => ({
 }))
 
 const listPhotosMock = vi.mocked(listPhotos)
+const markMock = vi.mocked(markPhotos)
+const unmarkMock = vi.mocked(unmarkPhotos)
 
 function page(ids: number[], total: number): PhotoPage {
   return {
@@ -35,6 +39,7 @@ function page(ids: number[], total: number): PhotoPage {
         camera_make: null,
         camera_model: null,
         status: 'active',
+        marked_for_deletion: false,
         created_at: '2026-01-01T00:00:00Z',
       }),
     ),
@@ -48,6 +53,9 @@ describe('library store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     listPhotosMock.mockReset()
+    markMock.mockClear()
+    markMock.mockResolvedValue({ marked: true, affected: 1 })
+    unmarkMock.mockClear()
   })
 
   it('loads the first page and reports the total and page count', async () => {
@@ -165,6 +173,35 @@ describe('library store', () => {
     expect(store.photos).toHaveLength(0)
     expect(store.total).toBe(0)
     expect(store.loading).toBe(false)
+  })
+
+  it('toggleMark flags a photo, calls the API, and tracks the on-page count', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+    expect(store.markedOnPage).toBe(0)
+
+    await store.toggleMark(1)
+
+    expect(markMock).toHaveBeenCalledWith([1])
+    expect(store.photos.find((p) => p.id === 1)!.marked_for_deletion).toBe(true)
+    expect(store.markedOnPage).toBe(1)
+
+    await store.toggleMark(1)
+    expect(unmarkMock).toHaveBeenCalledWith([1])
+    expect(store.markedOnPage).toBe(0)
+  })
+
+  it('reverts the optimistic mark if the API call fails', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 1))
+    const store = useLibraryStore()
+    await store.reload()
+    markMock.mockRejectedValueOnce(new Error('offline'))
+
+    await store.toggleMark(1)
+
+    expect(store.photos[0]!.marked_for_deletion).toBe(false)
+    expect(store.error).toContain('offline')
   })
 
   it('counts checked folders without double-counting checked descendants', async () => {

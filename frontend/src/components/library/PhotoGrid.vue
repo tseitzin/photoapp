@@ -27,19 +27,41 @@ function onTileOpen(photoId: number): void {
         <span class="rule" aria-hidden="true" />
       </header>
       <div class="tiles">
-        <button
+        <div
           v-for="photo in section.photos"
           :key="photo.id"
-          type="button"
           class="tile"
-          :class="{ 'tile--selected': photo.id === store.selectedPhotoId }"
-          :aria-label="photo.filename"
-          :title="`${photo.filename} — double-click to open`"
-          @click="onTileSelect(photo.id)"
-          @dblclick="onTileOpen(photo.id)"
+          :class="{
+            'tile--selected': photo.id === store.selectedPhotoId,
+            'tile--marked': photo.marked_for_deletion,
+          }"
         >
-          <img :src="thumbnailUrl(photo.id)" :alt="photo.filename" loading="lazy" />
-        </button>
+          <button
+            type="button"
+            class="tile-img"
+            :aria-label="photo.filename"
+            :title="`${photo.filename} — double-click to open`"
+            @click="onTileSelect(photo.id)"
+            @dblclick="onTileOpen(photo.id)"
+          >
+            <img :src="thumbnailUrl(photo.id)" :alt="photo.filename" loading="lazy" />
+          </button>
+          <button
+            type="button"
+            class="mark-toggle"
+            :class="{ 'mark-toggle--on': photo.marked_for_deletion }"
+            :aria-pressed="photo.marked_for_deletion"
+            :aria-label="
+              photo.marked_for_deletion
+                ? `Unmark ${photo.filename}`
+                : `Mark ${photo.filename} for deletion`
+            "
+            :title="photo.marked_for_deletion ? 'Marked for deletion' : 'Mark for deletion'"
+            @click.stop="store.toggleMark(photo.id)"
+          >
+            🗑
+          </button>
+        </div>
       </div>
     </section>
   </div>
@@ -83,12 +105,10 @@ function onTileOpen(photoId: number): void {
 }
 
 .tile {
+  position: relative;
   aspect-ratio: 1;
-  padding: 0;
-  border: 0;
   border-radius: 4px;
   overflow: hidden;
-  cursor: pointer;
   background: var(--skeleton);
   content-visibility: auto;
   contain-intrinsic-size: var(--tile-min, 112px);
@@ -102,16 +122,56 @@ function onTileOpen(photoId: number): void {
   box-shadow: inset 0 0 0 3px var(--accent);
 }
 
-.tile img {
+/* Marked wins visually so flagged photos stand out while scrolling. */
+.tile--marked {
+  box-shadow: inset 0 0 0 3px var(--danger);
+}
+
+.tile-img {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: block;
+}
+
+.tile-img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.tile--selected img {
-  /* keep the inset ring visible above the image */
-  mix-blend-mode: normal;
-  opacity: 0.92;
+.tile--marked .tile-img img {
+  opacity: 0.6;
+}
+
+.mark-toggle {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(9, 9, 11, 0.55);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.tile:hover .mark-toggle,
+.mark-toggle:focus-visible {
+  opacity: 1;
+}
+
+.mark-toggle--on {
+  opacity: 1;
+  background: var(--danger);
 }
 </style>

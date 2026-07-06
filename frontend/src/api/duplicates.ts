@@ -60,9 +60,11 @@ export function listGroups(query: GroupQuery = {}): Promise<DuplicateGroupPage> 
 export function decideGroup(
   groupId: number,
   decisions: { photo_id: number; decision: Decision }[],
+  force = false,
 ): Promise<DuplicateGroup> {
   return requestJson<DuplicateGroup>(`/api/duplicates/groups/${groupId}/decisions`, 'POST', {
     decisions,
+    force,
   })
 }
 
@@ -79,7 +81,7 @@ export function getDuplicateSummary(): Promise<DuplicateSummary> {
   return request<DuplicateSummary>('/api/duplicates/summary')
 }
 
-/** Active photos the user marked 'remove' — the quarantine work-list. */
+/** Active photos flagged for deletion (Library marks + duplicate removes). */
 export function listMarkedForRemoval(): Promise<PhotoRead[]> {
-  return request<PhotoRead[]>('/api/duplicates/marked')
+  return request<PhotoRead[]>('/api/photos/marked')
 }

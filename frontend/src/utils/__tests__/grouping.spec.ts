@@ -17,6 +17,7 @@ function photo(overrides: Partial<PhotoRead>): PhotoRead {
     camera_make: null,
     camera_model: null,
     status: 'active',
+    marked_for_deletion: false,
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,
   }

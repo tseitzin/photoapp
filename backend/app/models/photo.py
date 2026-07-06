@@ -9,6 +9,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -73,6 +74,11 @@ class Photo(Base):
     )
     status: Mapped[str] = mapped_column(
         String(12), default="active", server_default="active", index=True
+    )
+    # User-flagged from the Library for deletion; a soft mark (no file movement)
+    # that feeds the quarantine work-list. Cleared when the photo is quarantined.
+    marked_for_deletion: Mapped[bool] = mapped_column(
+        default=False, server_default=false(), index=True
     )
     last_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

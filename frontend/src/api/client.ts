@@ -16,6 +16,11 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
     response = await fetch(`${BASE_URL}${path}`, {
+      // Never serve API JSON from the HTTP cache: after a mutation (e.g.
+      // quarantining) the next GET of the same URL must reflect the new state,
+      // not a stale cached copy. (Image URLs use <img>, so they keep their own
+      // immutable caching.)
+      cache: 'no-store',
       headers: { Accept: 'application/json' },
       ...init,
     })

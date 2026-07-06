@@ -1,11 +1,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import DuplicateDecision, Photo
 from app.repositories.duplicates import DuplicateRepository
 from app.schemas.duplicates import (
     DecisionsWrite,
@@ -16,7 +14,6 @@ from app.schemas.duplicates import (
     GroupStatus,
     RebuildRead,
 )
-from app.schemas.photos import PhotoRead
 from app.services.duplicates import DuplicateService, rebuild_duplicate_groups
 
 router = APIRouter(prefix="/duplicates")
@@ -53,7 +50,9 @@ def get_group(group_id: int, service: Service) -> DuplicateGroupRead:
 
 @router.post("/groups/{group_id}/decisions")
 def decide(group_id: int, body: DecisionsWrite, service: Service) -> DuplicateGroupRead:
-    group = service.decide(group_id, [(d.photo_id, d.decision) for d in body.decisions])
+    group = service.decide(
+        group_id, [(d.photo_id, d.decision) for d in body.decisions], force=body.force
+    )
     return DuplicateGroupRead.from_group(group)
 
 
@@ -65,19 +64,6 @@ def dismiss(group_id: int, service: Service) -> DuplicateGroupRead:
 @router.post("/groups/{group_id}/reopen")
 def reopen(group_id: int, service: Service) -> DuplicateGroupRead:
     return DuplicateGroupRead.from_group(service.reopen(group_id))
-
-
-@router.get("/marked")
-def list_marked_for_removal(db: Annotated[Session, Depends(get_db)]) -> list[PhotoRead]:
-    """Active photos the user has marked 'remove' — the quarantine work-list."""
-    photos = db.scalars(
-        select(Photo)
-        .join(DuplicateDecision, DuplicateDecision.photo_id == Photo.id)
-        .where(DuplicateDecision.decision == "remove", Photo.status == "active")
-        .distinct()
-        .order_by(Photo.path)
-    ).all()
-    return [PhotoRead.model_validate(photo) for photo in photos]
 
 
 @router.get("/summary")

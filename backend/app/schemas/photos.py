@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 PhotoStatus = Literal["active", "missing", "quarantined"]
 
@@ -22,7 +22,17 @@ class PhotoRead(BaseModel):
     camera_make: str | None
     camera_model: str | None
     status: PhotoStatus
+    marked_for_deletion: bool
     created_at: datetime
+
+
+class MarkRequest(BaseModel):
+    photo_ids: list[int] = Field(min_length=1)
+
+
+class MarkResult(BaseModel):
+    marked: bool
+    affected: int
 
 
 class PhotoDetail(PhotoRead):

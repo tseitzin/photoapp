@@ -334,11 +334,11 @@ class TestAuditAndMarked:
             },
         )
 
-        marked = client.get("/api/duplicates/marked").json()
+        marked = client.get("/api/photos/marked").json()
         assert [p["id"] for p in marked] == [loser]
 
         client.post("/api/quarantine", json={"photo_ids": [loser]})
-        assert client.get("/api/duplicates/marked").json() == []
+        assert client.get("/api/photos/marked").json() == []
 
 
 class TestResetDeletionHistory:

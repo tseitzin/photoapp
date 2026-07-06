@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { getPhoto, previewUrl, thumbnailUrl, type PhotoDetail } from '@/api/photos'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useDuplicatesStore } from '@/stores/duplicates'
 import { formatBytes, formatCount, formatDate } from '@/utils/format'
 
 const store = useDuplicatesStore()
 
 const details = ref<Record<number, PhotoDetail>>({})
+const confirmingRemoveBoth = ref(false)
+
+async function removeBoth(): Promise<void> {
+  confirmingRemoveBoth.value = false
+  await store.decide('remove_both')
+}
 
 // Fade the full preview in once it decodes; until then (or if it fails) the
 // cached thumbnail behind it stays visible.
@@ -161,11 +168,30 @@ const rows = computed<DiffRow[]>(() => {
       <button type="button" class="btn btn--keep" @click="store.decide('keep_a')">Keep A</button>
       <button type="button" class="btn" @click="store.decide('keep_b')">Keep B</button>
       <button type="button" class="btn" @click="store.decide('keep_both')">Keep both</button>
+      <button type="button" class="btn btn--danger" @click="confirmingRemoveBoth = true">
+        Remove both
+      </button>
       <span class="reclaim">
         Removing B marks {{ formatBytes(store.currentPair.b.photo.size_bytes) }} for quarantine
       </span>
       <button type="button" class="btn btn--ghost" @click="store.skip()">Skip →</button>
     </footer>
+
+    <ConfirmDialog
+      v-if="confirmingRemoveBoth"
+      title="Remove both photos?"
+      confirm-label="Remove both"
+      danger
+      @confirm="removeBoth"
+      @cancel="confirmingRemoveBoth = false"
+    >
+      <p>
+        Both <strong>{{ store.currentPair.a.photo.filename }}</strong> and
+        <strong>{{ store.currentPair.b.photo.filename }}</strong> will be marked for removal —
+        neither is kept. They go to the removal work-list, where you quarantine and then
+        permanently delete them (reversible until you delete for good).
+      </p>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -387,6 +413,13 @@ const rows = computed<DiffRow[]>(() => {
   background: var(--success);
   border-color: var(--success);
   color: #fff;
+  font-weight: 600;
+}
+
+.btn--danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
   font-weight: 600;
 }
 

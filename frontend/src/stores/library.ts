@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import {
   getFacets,
   listPhotos,
+  markPhotos,
+  unmarkPhotos,
   type Facets,
   type PhotoRead,
   type PhotoSort,
@@ -218,6 +220,24 @@ export const useLibraryStore = defineStore('library', () => {
     selectedPhotoId.value = id
   }
 
+  const markedOnPage = computed(
+    () => photos.value.filter((p) => p.marked_for_deletion).length,
+  )
+
+  /** Flag/unflag a photo for deletion; updates the tile badge optimistically. */
+  async function toggleMark(photoId: number): Promise<void> {
+    const photo = photos.value.find((p) => p.id === photoId)
+    if (!photo) return
+    const willMark = !photo.marked_for_deletion
+    photo.marked_for_deletion = willMark // optimistic
+    try {
+      await (willMark ? markPhotos([photoId]) : unmarkPhotos([photoId]))
+    } catch (e) {
+      photo.marked_for_deletion = !willMark // revert on failure
+      error.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+
   const lightboxPhoto = computed(() => photos.value[lightboxIndex.value] ?? null)
 
   function openLightbox(photoId: number): void {
@@ -284,5 +304,7 @@ export const useLibraryStore = defineStore('library', () => {
     setSort,
     setGroupBy,
     selectPhoto,
+    toggleMark,
+    markedOnPage,
   }
 })

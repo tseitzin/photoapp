@@ -111,7 +111,8 @@ function opLabel(op: string): string {
         </button>
       </header>
       <p v-if="!store.marked.length" class="muted">
-        Nothing marked. Review duplicates and mark photos for removal first.
+        Nothing marked. Mark photos for deletion from the Library (or review
+        duplicates) and they’ll appear here.
       </p>
       <ul v-else class="rows">
         <li v-for="photo in store.marked" :key="photo.id" class="row">

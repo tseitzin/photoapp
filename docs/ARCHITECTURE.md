@@ -66,9 +66,12 @@ scans ──────┘      ├──▶ file_operations (audit)
   `root_id, filename, ext, mime, size_bytes, mtime, width, height, captured_at,
   camera_make, camera_model, exif JSONB, sha256 (indexed), phash BIGINT,
   phash_b0..phash_b7 SMALLINT (each indexed), status (active|missing|quarantined),
-  thumb_status, last_error, created_at, updated_at`.
+  marked_for_deletion (indexed), thumb_status, last_error, created_at, updated_at`.
   Change detection: `(size_bytes, mtime)` differs → reprocess. Same `sha256` seen at a
   new path with the old path missing → move, not delete+add.
+  `marked_for_deletion` is a soft flag set from the Library (no file movement); the
+  quarantine work-list (`GET /api/photos/marked`) is the union of flagged photos and
+  duplicate `remove` decisions. Quarantining a photo clears the flag.
 - **scans** — persisted job state: `status (pending|running|paused|completed|failed|cancelled),
   phase, files_found, files_processed, files_added, files_changed, files_missing,
   error_count, current_path, started_at, finished_at`. Progress UI polls this;
@@ -173,7 +176,9 @@ for v1 simplicity; SSE is a compatible upgrade if polling feels laggy.
 - Quarantine preserves the source-relative path under `QUARANTINE_DIR` and records a
   `file_operations` row; restore is the inverse. Both are covered by tests before any
   UI exposes them (Phase 6).
-- Removing every member of a duplicate group requires an explicit strong warning.
+- Removing every member of a duplicate group is refused by default; the "Remove
+  both" review action allows it only with `force` (behind a strong-confirmation
+  dialog in the UI).
 
 ## Key dependencies
 

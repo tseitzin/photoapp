@@ -65,7 +65,7 @@ def test_reopen_returns_reviewed_group_to_pending_and_clears_decisions(
     assert body["status"] == "pending"
     assert all(m["decision"] is None for m in body["members"])
     # The photo that had been marked for removal is no longer in the work-list.
-    assert client.get("/api/duplicates/marked").json() == []
+    assert client.get("/api/photos/marked").json() == []
 
 
 def test_reopen_a_dismissed_group_makes_it_reviewable_again(
@@ -184,6 +184,31 @@ def test_refuses_to_remove_every_member_of_a_group(client: TestClient, tmp_path:
 
     assert response.status_code == 422
     assert "keep at least one" in response.json()["detail"]
+
+
+def test_force_allows_removing_every_member_of_a_group(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _make_dupes(tmp_path, copies=2)
+    _index(client, tmp_path)
+    group = client.get("/api/duplicates/groups").json()["items"][0]
+    member_ids = [m["photo"]["id"] for m in group["members"]]
+
+    response = client.post(
+        f"/api/duplicates/groups/{group['id']}/decisions",
+        json={
+            "decisions": [{"photo_id": pid, "decision": "remove"} for pid in member_ids],
+            "force": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert all(m["decision"] == "remove" for m in body["members"])
+    assert body["status"] == "reviewed"
+    # both now appear in the removal work-list
+    marked_ids = {p["id"] for p in client.get("/api/photos/marked").json()}
+    assert marked_ids == set(member_ids)
 
 
 def test_undecided_reverts_a_decision_and_reopens_group(client: TestClient, tmp_path: Path) -> None:

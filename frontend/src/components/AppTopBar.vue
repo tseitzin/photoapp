@@ -16,6 +16,7 @@ const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Library', to: '/library' },
   { label: 'Duplicates', to: '/duplicates' },
+  { label: 'Cleanup', to: '/quarantine' },
   { label: 'Organize', to: '/organize' },
 ] as const
 

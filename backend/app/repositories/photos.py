@@ -1,11 +1,11 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, cast, func, or_, select
+from sqlalchemy import ColumnElement, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import BIT
 from sqlalchemy.orm import Session
 
-from app.models import Photo
+from app.models import DuplicateDecision, Photo
 
 # Facet/filter canonicalization: one chip covers equivalent extensions.
 CANONICAL_EXT = {"jpg": "jpeg", "tif": "tiff", "heif": "heic"}
@@ -85,6 +85,34 @@ class PhotoRepository:
 
     def get_by_path(self, path: str) -> Photo | None:
         return self._session.scalar(select(Photo).where(Photo.path == path))
+
+    def set_marked(self, photo_ids: Sequence[int], marked: bool) -> int:
+        """Flag/unflag active photos for deletion. Returns active rows affected."""
+        if not photo_ids:
+            return 0
+        target = (Photo.id.in_(photo_ids), Photo.status == "active")
+        affected = (
+            self._session.scalar(select(func.count()).select_from(Photo).where(*target)) or 0
+        )
+        self._session.execute(update(Photo).where(*target).values(marked_for_deletion=marked))
+        self._session.commit()
+        return affected
+
+    def list_marked_for_removal(self) -> Sequence[Photo]:
+        """Active photos flagged from the Library or via a duplicate 'remove'."""
+        has_remove_decision = (
+            select(DuplicateDecision.photo_id)
+            .where(DuplicateDecision.decision == "remove")
+            .scalar_subquery()
+        )
+        return self._session.scalars(
+            select(Photo)
+            .where(
+                Photo.status == "active",
+                or_(Photo.marked_for_deletion.is_(True), Photo.id.in_(has_remove_decision)),
+            )
+            .order_by(Photo.path)
+        ).all()
 
     def list_page(
         self,
