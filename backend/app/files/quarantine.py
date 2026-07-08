@@ -20,13 +20,14 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.dedupe.incremental import add_photos_to_groups, remove_photos_from_groups
 from app.files.paths import (
     PathValidationError,
     ensure_within,
     resolve_existing_file,
     resolve_lenient,
 )
-from app.models import DuplicateGroup, FileOperation, Photo, ScanRoot
+from app.models import DuplicateGroupMember, FileOperation, Photo, ScanRoot
 from app.services.errors import ConflictError, ValidationFailedError
 
 logger = logging.getLogger(__name__)
@@ -96,22 +97,30 @@ class FileManagementService:
         )
 
     def _groups_fully_covered(self, photo_ids: set[int]) -> list[int]:
-        """Ids of duplicate groups whose every remaining active member is targeted."""
+        """Ids of duplicate groups whose every remaining active member is targeted.
+
+        Only groups containing one of these photos are examined (not the whole
+        table), so it stays cheap as the library grows.
+        """
+        candidate_ids = set(
+            self._session.scalars(
+                select(DuplicateGroupMember.group_id).where(
+                    DuplicateGroupMember.photo_id.in_(photo_ids)
+                )
+            ).all()
+        )
         covered: list[int] = []
-        groups = self._session.scalars(select(DuplicateGroup)).unique().all()
-        for group in groups:
-            active_ids = {
-                member.photo_id for member in group.members if member.photo.status == "active"
-            }
+        for group_id in candidate_ids:
+            active_ids = set(
+                self._session.scalars(
+                    select(DuplicateGroupMember.photo_id)
+                    .join(Photo, Photo.id == DuplicateGroupMember.photo_id)
+                    .where(DuplicateGroupMember.group_id == group_id, Photo.status == "active")
+                ).all()
+            )
             if active_ids and active_ids <= photo_ids:
-                covered.append(group.id)
+                covered.append(group_id)
         return covered
-
-    def _rebuild_groups(self) -> None:
-        # Local import to avoid a service<->service import cycle at module load.
-        from app.services.duplicates import rebuild_duplicate_groups
-
-        rebuild_duplicate_groups(self._session)
 
     # -- operations ----------------------------------------------------------
 
@@ -159,8 +168,9 @@ class FileManagementService:
             logger.info("quarantined %s -> %s", source, dest)
 
         self._session.commit()
-        if any(r.ok for r in results):
-            self._rebuild_groups()
+        # Incrementally prune the just-quarantined photos from their duplicate
+        # groups instead of rebuilding the whole library's groups.
+        remove_photos_from_groups(self._session, [r.photo_id for r in results if r.ok])
         return BatchResult(batch_id=batch_id, results=results)
 
     def restore(self, photo_ids: list[int]) -> BatchResult:
@@ -200,8 +210,9 @@ class FileManagementService:
             logger.info("restored %s -> %s", source, dest)
 
         self._session.commit()
-        if any(r.ok for r in results):
-            self._rebuild_groups()
+        # Re-form exact groups for restored photos (similar groups reconcile on
+        # the next scan) — no whole-library rebuild.
+        add_photos_to_groups(self._session, [r.photo_id for r in results if r.ok])
         return BatchResult(batch_id=batch_id, results=results)
 
     def delete_permanently(self, photo_ids: list[int], confirm: bool) -> BatchResult:

@@ -9,6 +9,38 @@ const store = useLibraryStore()
 const detail = ref<PhotoDetail | null>(null)
 const detailCache = new Map<number, PhotoDetail>()
 
+// The cached 512px thumbnail shows instantly; the full 2048px preview is only
+// requested after the user settles on a photo (debounced), so rapidly skimming
+// fires no preview generations on the server. Neighbors are prefetched on settle.
+const PREVIEW_DEBOUNCE_MS = 150
+const previewSrc = ref<string | null>(null)
+let previewTimer: ReturnType<typeof setTimeout> | undefined
+
+function prefetchNeighborPreviews(): void {
+  for (const delta of [1, -1]) {
+    const neighbor = store.photos[store.lightboxIndex + delta]
+    if (neighbor) new Image().src = previewUrl(neighbor.id)
+  }
+}
+
+watch(
+  () => store.lightboxPhoto?.id,
+  (id) => {
+    previewSrc.value = null // show the thumbnail while settling — no preview request
+    clearTimeout(previewTimer)
+    if (id == null) return
+    previewTimer = setTimeout(() => {
+      previewSrc.value = previewUrl(id)
+      prefetchNeighborPreviews()
+    }, PREVIEW_DEBOUNCE_MS)
+  },
+  { immediate: true },
+)
+
+function onPreviewLoad(event: Event): void {
+  ;(event.target as HTMLImageElement).classList.add('loaded')
+}
+
 watch(
   () => store.lightboxPhoto?.id,
   async (id) => {
@@ -42,7 +74,10 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  clearTimeout(previewTimer)
+})
 
 // Filmstrip: a window around the current index keeps the DOM small.
 const strip = computed(() => {
@@ -58,9 +93,8 @@ watch(
   () => store.lightboxIndex,
   () => {
     requestAnimationFrame(() => {
-      stripEl.value
-        ?.querySelector('.strip-thumb--current')
-        ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+      const current = stripEl.value?.querySelector('.strip-thumb--current')
+      current?.scrollIntoView?.({ inline: 'center', block: 'nearest' })
     })
   },
 )
@@ -98,12 +132,19 @@ watch(
       >
         ‹
       </button>
-      <img
-        :key="store.lightboxPhoto.id"
-        class="image"
-        :src="previewUrl(store.lightboxPhoto.id)"
-        :alt="store.lightboxPhoto.filename"
-      />
+      <div
+        class="image-wrap"
+        :style="{ backgroundImage: `url(${thumbnailUrl(store.lightboxPhoto.id)})` }"
+      >
+        <img
+          v-if="previewSrc"
+          :key="store.lightboxPhoto.id"
+          class="image"
+          :src="previewSrc"
+          :alt="store.lightboxPhoto.filename"
+          @load="onPreviewLoad"
+        />
+      </div>
       <button
         type="button"
         class="nav nav--next"
@@ -213,12 +254,33 @@ watch(
   padding: 0 18px;
 }
 
-.image {
+.image-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   max-width: calc(100% - 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Cached thumbnail shown instantly (upscaled); the full preview covers it. */
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.image {
+  max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 6px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.image.loaded {
+  opacity: 1;
 }
 
 .nav {

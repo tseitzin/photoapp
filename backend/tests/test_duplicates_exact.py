@@ -186,9 +186,7 @@ def test_refuses_to_remove_every_member_of_a_group(client: TestClient, tmp_path:
     assert "keep at least one" in response.json()["detail"]
 
 
-def test_force_allows_removing_every_member_of_a_group(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_force_allows_removing_every_member_of_a_group(client: TestClient, tmp_path: Path) -> None:
     _make_dupes(tmp_path, copies=2)
     _index(client, tmp_path)
     group = client.get("/api/duplicates/groups").json()["items"][0]

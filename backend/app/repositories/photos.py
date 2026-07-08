@@ -91,9 +91,7 @@ class PhotoRepository:
         if not photo_ids:
             return 0
         target = (Photo.id.in_(photo_ids), Photo.status == "active")
-        affected = (
-            self._session.scalar(select(func.count()).select_from(Photo).where(*target)) or 0
-        )
+        affected = self._session.scalar(select(func.count()).select_from(Photo).where(*target)) or 0
         self._session.execute(update(Photo).where(*target).values(marked_for_deletion=marked))
         self._session.commit()
         return affected

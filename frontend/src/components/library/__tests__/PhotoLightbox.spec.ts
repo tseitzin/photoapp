@@ -98,4 +98,47 @@ describe('PhotoLightbox', () => {
 
     expect(store.lightboxPhoto?.id).toBe(3)
   })
+
+  it('shows the thumbnail immediately and defers the full preview until settled', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper } = openAt(1)
+
+      // instantly: thumbnail is the stage background, full preview not yet requested
+      const stage = wrapper.find('.image-wrap')
+      expect(stage.attributes('style')).toContain('/thumb/1')
+      expect(wrapper.find('img.image').exists()).toBe(false)
+
+      // after the debounce, the full preview is rendered
+      vi.advanceTimersByTime(200)
+      await wrapper.vm.$nextTick()
+      expect(wrapper.find('img.image').attributes('src')).toBe('/preview/1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not request the full preview while rapidly navigating past images', async () => {
+    vi.useFakeTimers()
+    try {
+      const { store, wrapper } = openAt(1)
+
+      // step through several images faster than the debounce window
+      store.lightboxStep(1)
+      vi.advanceTimersByTime(50)
+      store.lightboxStep(1)
+      vi.advanceTimersByTime(50)
+      await wrapper.vm.$nextTick()
+
+      // still skimming — no full preview <img> requested yet
+      expect(wrapper.find('img.image').exists()).toBe(false)
+
+      // settle: now the current image's preview loads
+      vi.advanceTimersByTime(200)
+      await wrapper.vm.$nextTick()
+      expect(wrapper.find('img.image').attributes('src')).toBe('/preview/3')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
