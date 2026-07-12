@@ -11,10 +11,11 @@ def make_image(
     color: str = "steelblue",
     exif_fields: dict[int, str] | None = None,
     exif_ifd_fields: dict[int, str] | None = None,
+    gps_ifd_fields: dict[int, object] | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.new("RGB", size, color)
-    if exif_fields or exif_ifd_fields:
+    if exif_fields or exif_ifd_fields or gps_ifd_fields:
         exif = Image.Exif()
         for tag, value in (exif_fields or {}).items():
             exif[tag] = value
@@ -22,10 +23,32 @@ def make_image(
             ifd = exif.get_ifd(0x8769)
             for tag, value in exif_ifd_fields.items():
                 ifd[tag] = value
+        if gps_ifd_fields:
+            gps = exif.get_ifd(0x8825)
+            for tag, value in gps_ifd_fields.items():
+                gps[tag] = value
         image.save(path, exif=exif)
     else:
         image.save(path)
     return path
+
+
+def gps_exif(latitude: float, longitude: float) -> dict[int, object]:
+    """GPS IFD fields for signed decimal coordinates (refs from the signs)."""
+
+    def dms(value: float) -> tuple[float, float, float]:
+        value = abs(value)
+        degrees = int(value)
+        minutes = int((value - degrees) * 60)
+        seconds = round((value - degrees - minutes / 60) * 3600, 4)
+        return (float(degrees), float(minutes), seconds)
+
+    return {
+        1: "S" if latitude < 0 else "N",
+        2: dms(latitude),
+        3: "W" if longitude < 0 else "E",
+        4: dms(longitude),
+    }
 
 
 def make_textured_image(

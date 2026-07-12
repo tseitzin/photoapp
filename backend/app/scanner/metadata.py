@@ -28,6 +28,11 @@ _TAG_MODEL = 272
 _TAG_DATETIME = 306
 _TAG_DATETIME_ORIGINAL = 36867
 _EXIF_VALUE_MAX_LEN = 256
+# Tags within the GPS IFD (ExifTags.IFD.GPSInfo).
+_GPS_LAT_REF = 1
+_GPS_LAT = 2
+_GPS_LON_REF = 3
+_GPS_LON = 4
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,8 @@ class ImageMetadata:
     captured_at: datetime | None
     camera_make: str | None
     camera_model: str | None
+    latitude: float | None
+    longitude: float | None
     exif: dict[str, Any]
 
 
@@ -76,6 +83,33 @@ def _coerce_json_value(value: object) -> object | None:
         return None
 
 
+def _dms_to_decimal(dms: object, ref: object, negative_ref: str) -> float | None:
+    """Degrees/minutes/seconds rationals -> signed decimal degrees, or None."""
+    if not isinstance(dms, tuple | list) or len(dms) != 3:
+        return None
+    try:
+        value = float(dms[0]) + float(dms[1]) / 60 + float(dms[2]) / 3600
+    except (TypeError, ValueError, ZeroDivisionError):  # 0/0 IFDRational raises too
+        return None
+    if isinstance(ref, str) and ref.strip().upper() == negative_ref:
+        value = -value
+    return value
+
+
+def _parse_gps(exif: Image.Exif) -> tuple[float | None, float | None]:
+    """(latitude, longitude) from the GPS IFD — both or neither, range-checked."""
+    try:
+        gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
+    except Exception:  # noqa: BLE001 - malformed IFDs must not kill the scan
+        logger.debug("unreadable GPS IFD", exc_info=True)
+        return None, None
+    latitude = _dms_to_decimal(gps.get(_GPS_LAT), gps.get(_GPS_LAT_REF), "S")
+    longitude = _dms_to_decimal(gps.get(_GPS_LON), gps.get(_GPS_LON_REF), "W")
+    if latitude is None or longitude is None or abs(latitude) > 90 or abs(longitude) > 180:
+        return None, None
+    return latitude, longitude
+
+
 def _exif_to_dict(exif: Image.Exif) -> dict[str, Any]:
     result: dict[str, Any] = {}
     items: list[tuple[int, object]] = list(exif.items())
@@ -108,6 +142,7 @@ def read_metadata(image: Image.Image, width: int, height: int) -> ImageMetadata:
     captured_at = _parse_exif_datetime(
         exif_ifd.get(_TAG_DATETIME_ORIGINAL)
     ) or _parse_exif_datetime(exif.get(_TAG_DATETIME))
+    latitude, longitude = _parse_gps(exif)
 
     return ImageMetadata(
         width=width,
@@ -115,6 +150,9 @@ def read_metadata(image: Image.Image, width: int, height: int) -> ImageMetadata:
         captured_at=captured_at,
         camera_make=_clean_str(exif.get(_TAG_MAKE)),
         camera_model=_clean_str(exif.get(_TAG_MODEL)),
+        latitude=latitude,
+        longitude=longitude,
+        # GPS tags stay out of the JSONB dump; the columns are the contract.
         exif=_exif_to_dict(exif),
     )
 

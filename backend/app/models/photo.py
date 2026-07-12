@@ -5,6 +5,7 @@ from sqlalchemy import (
     BigInteger,
     Computed,
     DateTime,
+    Float,
     ForeignKey,
     SmallInteger,
     String,
@@ -41,6 +42,9 @@ class Photo(Base):
     captured_at: Mapped[datetime | None] = mapped_column(DateTime())
     camera_make: Mapped[str | None] = mapped_column(Text)
     camera_model: Mapped[str | None] = mapped_column(Text)
+    # GPS coordinates in decimal degrees (double precision — REAL truncates).
+    latitude: Mapped[float | None] = mapped_column(Float(53))
+    longitude: Mapped[float | None] = mapped_column(Float(53))
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     # 64-bit perceptual hash stored signed; the 8 generated band columns below

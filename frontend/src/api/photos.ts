@@ -23,6 +23,9 @@ export interface PhotoRead {
   captured_at: string | null
   camera_make: string | null
   camera_model: string | null
+  // GPS decimal degrees; optional so test fixtures predating GPS stay valid.
+  latitude?: number | null
+  longitude?: number | null
   status: PhotoStatus
   marked_for_deletion: boolean
   created_at: string

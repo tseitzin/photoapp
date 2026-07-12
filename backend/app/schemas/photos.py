@@ -21,6 +21,8 @@ class PhotoRead(BaseModel):
     captured_at: datetime | None
     camera_make: str | None
     camera_model: str | None
+    latitude: float | None
+    longitude: float | None
     status: PhotoStatus
     marked_for_deletion: bool
     created_at: datetime

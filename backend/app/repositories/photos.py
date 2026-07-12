@@ -136,6 +136,35 @@ class PhotoRepository:
             self._session.scalars(select(Photo.path).where(Photo.path.like(f"{normalized}/%")))
         )
 
+    def gps_backfill_candidates(self, after_id: int, limit: int) -> Sequence[Photo]:
+        """Active photos with no coordinates yet, cursor-paginated by id."""
+        return self._session.scalars(
+            select(Photo)
+            .where(
+                Photo.status == "active",
+                Photo.latitude.is_(None),
+                Photo.longitude.is_(None),
+                Photo.id > after_id,
+            )
+            .order_by(Photo.id)
+            .limit(limit)
+        ).all()
+
+    def count_gps_backfill_remaining(self, after_id: int) -> int:
+        return (
+            self._session.scalar(
+                select(func.count())
+                .select_from(Photo)
+                .where(
+                    Photo.status == "active",
+                    Photo.latitude.is_(None),
+                    Photo.longitude.is_(None),
+                    Photo.id > after_id,
+                )
+            )
+            or 0
+        )
+
     def list_page(
         self,
         limit: int,
