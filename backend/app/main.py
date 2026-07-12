@@ -32,13 +32,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if get_settings().recover_scans_on_startup:
         # Local import: keeps module import light and avoids engine creation at import time.
         from app.db.session import SessionLocal
+        from app.services.organize import recover_interrupted_runs
         from app.services.scans import recover_interrupted_scans
 
         try:
             with SessionLocal() as session:
                 recover_interrupted_scans(session)
+                recover_interrupted_runs(session)
         except Exception:  # noqa: BLE001 - DB may be down; health endpoint reports that
-            logger.warning("could not check for interrupted scans", exc_info=True)
+            logger.warning("could not check for interrupted jobs", exc_info=True)
     yield
 
 

@@ -38,7 +38,7 @@ class FileOperationRead(BaseModel):
 
     id: int
     photo_id: int | None
-    op: Literal["quarantine", "restore", "delete"]
+    op: Literal["quarantine", "restore", "delete", "organize"]
     src_path: str
     dest_path: str | None
     batch_id: str
