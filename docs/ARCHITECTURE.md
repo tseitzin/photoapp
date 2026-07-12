@@ -2,7 +2,7 @@
 
 Local-first photo library organizer. Single user, no auth, never exposed beyond
 localhost. Originals are read-only to the app except for the explicit, audited
-quarantine workflow.
+file workflows in `files/` (quarantine and organize).
 
 ## System overview
 
@@ -43,11 +43,14 @@ quarantine workflow.
 
 ## Frontend structure
 
-- `views/` — Home, Library, Duplicates, Organize (P7), Scan; routed via Vue Router.
+- `views/` — Home, Library, Duplicates, Organize, Scan, Cleanup; routed via Vue Router.
 - `components/` — recreated from the design prototypes (top bar, folder tree, photo
   grid, lightbox, compare panes, dial, toggles, segmented controls, modals).
 - `stores/` — Pinia: `theme` (persisted to `localStorage['aperture-theme']`),
-  `library`, `duplicates`, `scan`, `organize` (P7) — mirroring the handoff doc's state model.
+  `library`, `duplicates`, `scan`, `quarantine`, `organize` — mirroring the handoff
+  doc's state model. The Organize working set is the library store's folder
+  checkboxes (`checkedFolders`/`checkedTopLevel`) — one source of truth shared
+  across the Library sidebar and the Organize screen.
 - `api/` — single typed client module per resource; components never call `fetch`.
 - Styling: design tokens as CSS custom properties on the root, swapped for light/dark.
   No CSS framework — the design is hand-rolled and stays that way.
@@ -64,7 +67,7 @@ scans ──────┘      ├──▶ file_operations (audit)
 - **scan_roots** — configured library directories. `id, path (unique), enabled, created_at`.
 - **photos** — one row per discovered file. Identity: `path` (unique). Fields:
   `root_id, filename, ext, mime, size_bytes, mtime, width, height, captured_at,
-  camera_make, camera_model, exif JSONB, sha256 (indexed), phash BIGINT,
+  camera_make, camera_model, latitude, longitude, exif JSONB, sha256 (indexed), phash BIGINT,
   phash_b0..phash_b7 SMALLINT (each indexed), status (active|missing|quarantined),
   marked_for_deletion (indexed), thumb_status, last_error, created_at, updated_at`.
   Change detection: `(size_bytes, mtime)` differs → reprocess. Same `sha256` seen at a
@@ -83,7 +86,11 @@ scans ──────┘      ├──▶ file_operations (audit)
 - **duplicate_group_members** — `group_id, photo_id, similarity_pct`.
 - **duplicate_decisions** — `group_id, photo_id, decision (keep|remove|undecided),
   decided_at`. This is the "user decisions" tracking — review state, not accounts.
-- **file_operations** — audit log: `photo_id, op (quarantine|restore|delete),
+- **organize_runs** — persisted job state for physical organize (Phase 7), polled
+  like scans: `status (pending|running|completed|failed), params JSONB (the
+  submitted spec), batch_id, total, planned, moved, skipped_duplicates,
+  already_organized, undated, failed_count, est_bytes, message, timestamps`.
+- **file_operations** — audit log: `photo_id, op (quarantine|restore|delete|organize),
   src_path, dest_path, size_bytes, batch_id, performed_at`. Never auto-pruned
   by the system. `size_bytes` is captured at operation time so lifetime tallies
   (photos deleted, disk space reclaimed = `SUM(size_bytes) WHERE op='delete'`)
@@ -180,6 +187,30 @@ for v1 simplicity; SSE is a compatible upgrade if polling feels laggy.
   both" review action allows it only with `force` (behind a strong-confirmation
   dialog in the UI).
 
+## Organize (Phase 7)
+
+Physical organization: moves selected folders' active photos into a destination
+structure — `keep` (current folder names), `date` (`YYYY/MM/`, no-capture-date →
+`Undated/`), or `camera` (one folder per model). Optional rename to
+`YYYY-MM-DD_HHMMSS.ext` (same-second collisions get `_01`, `_02`…) and
+skip-duplicates (only the exact-group keeper moves).
+
+- `files/organize.py::build_plan` is the **only** code computing destinations;
+  `POST /api/organize/preview` (dry-run) and the execute job both call it, so the
+  preview the user approves is what runs. Planning is pure DB work — three indexed
+  queries, zero per-file disk access — so previews stay sub-second at 50k+ photos.
+- Collisions never overwrite: a destination is occupied if claimed in-batch or held
+  by **any** photos row (the path column is UNIQUE; quarantined rows keep their old
+  paths). The executor re-checks `dest.exists()` right before each move.
+- Execution is a background job (`organize_runs` row + `ThreadJobRunner`, 1s
+  polling, serialized with scans). Each move updates `photo.path/filename` (and
+  `root_id` for cross-root moves) transactionally and appends an `op="organize"`
+  audit row under one batch id; commits every 200 moves. A crash loses at most one
+  chunk of DB updates — the next scan's sha256 move-reconciliation retargets the
+  rows, and interrupted runs are marked failed on startup.
+- Duplicate groups, decisions, and the thumbnail cache are untouched by moves
+  (photo-id / content-hash keyed); the folder tree is derived from paths per request.
+
 ## Key dependencies
 
 | Dependency | Why |
@@ -208,6 +239,8 @@ for v1 simplicity; SSE is a compatible upgrade if polling feels laggy.
 - Image embeddings (CLIP-family) in `photo_embeddings` + pgvector ANN for semantic
   similarity and "find edited versions".
 - RAW support via `rawpy` (decode for thumbnails/pHash) or metadata-only indexing.
-- Group-by-location: GPS EXIF + offline reverse geocoding.
+- Group-by-location UI: coordinates are now extracted during scans
+  (`photos.latitude/longitude`; `POST /api/maintenance/backfill-gps` for photos
+  indexed earlier) — what remains is offline reverse geocoding + the view.
+- Tags (the design's Organize screen includes a Tags card, deferred from v1).
 - Dedicated worker process / real queue if in-process jobs become limiting.
-- The Organize (move/tag/rename) flow — Phase 7, after the safety layer is proven.

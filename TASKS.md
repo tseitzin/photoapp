@@ -103,10 +103,26 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
       mark → refuse wipe → quarantine → restore → delete → audit.
 - [x] **PR 6.3** — merged into 6.1 (backend) and 6.2 (UI); see above.
 
-## Phase 7 — Deferred / future
+## Phase 7 — Organize
 
-- [ ] Organize flow (move/tag/rename + destination picker) — conflicts with
-      index-in-place; only after Phase 6 safety layer is proven
-- [ ] Tags (non-destructive subset of Organize) — could move earlier if wanted
+- [x] **PR 7.1** — Organize flow (move/rename + destination picker). Physical
+      moves through the audited `files/` layer: modes keep-structure / by-date
+      (`YYYY/MM/`, `Undated/` fallback) / by-camera; rename to capture timestamp
+      with `_01` collision suffixes; skip-duplicates (keeper only). Shared plan
+      builder powers both `POST /api/organize/preview` (dry-run, zero disk I/O)
+      and the background execute job (`organize_runs` + 1s polling, chunked
+      commits, `op="organize"` audit rows). Organize screen per the handoff
+      (working set ← Library folder checkboxes, destination picker modal,
+      toggles, preview rail, success banner); Tags card deferred. 20 pytest +
+      13 vitest tests.
+- [x] **PR 7.2** — GPS groundwork: scanner reads the EXIF GPS IFD into
+      `photos.latitude/longitude` (migration 0012);
+      `POST /api/maintenance/backfill-gps` cursor-sweeps photos indexed before
+      the change. No location UI yet.
+
+## Deferred / future
+
+- [ ] Tags (non-destructive subset of Organize; card exists in the design)
+- [ ] Group-by-location UI (needs offline reverse geocoding; coordinates now indexed)
 - [ ] pgvector embeddings for semantic similarity
-- [ ] RAW support (rawpy), group-by-location, SSE progress
+- [ ] RAW support (rawpy), SSE progress
