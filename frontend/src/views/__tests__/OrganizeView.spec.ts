@@ -189,17 +189,56 @@ describe('OrganizeView', () => {
 
     await wrapper.find('.node').trigger('click')
 
-    // a new-folder segment containing "/" is rejected
+    // hidden-folder names are rejected
     await wrapper.find('.new-folder').trigger('click')
-    await wrapper.find('.new-input').setValue('bad/name')
+    await wrapper.find('.new-input').setValue('.hidden')
     await wrapper.find('.choose').trigger('click')
-    expect(wrapper.find('.error').text()).toContain('cannot contain')
+    expect(wrapper.find('.error').text()).toContain('cannot start with')
     expect(organize.pickerOpen).toBe(true)
 
     // a valid segment is appended to the selected folder
     await wrapper.find('.new-input').setValue('Organized')
     await wrapper.find('.choose').trigger('click')
     expect(organize.destination).toBe('/lib/Organized')
+    expect(organize.pickerOpen).toBe(false)
+  })
+
+  it('the destination picker accepts a typed absolute path', async () => {
+    const library = useLibraryStore()
+    library.folders = [folder('/lib', { has_children: false })]
+    library.toggleChecked('/lib')
+    const organize = useOrganizeStore()
+    organize.destination = '/lib'
+    organize.pickerOpen = true
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.new-folder').trigger('click')
+    await wrapper.find('.new-input').setValue('/Volumes/TimDrive/Updated')
+    await wrapper.find('.choose').trigger('click')
+
+    expect(organize.destination).toBe('/Volumes/TimDrive/Updated')
+    expect(organize.pickerOpen).toBe(false)
+  })
+
+  it('the destination picker accepts a nested relative subpath', async () => {
+    const library = useLibraryStore()
+    library.folders = [folder('/lib', { has_children: false })]
+    library.toggleChecked('/lib')
+    const organize = useOrganizeStore()
+    organize.destination = '/lib'
+    organize.pickerOpen = true
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.node').trigger('click')
+    await wrapper.find('.new-folder').trigger('click')
+    await wrapper.find('.new-input').setValue('Organized/2024')
+    await wrapper.find('.choose').trigger('click')
+
+    expect(organize.destination).toBe('/lib/Organized/2024')
     expect(organize.pickerOpen).toBe(false)
   })
 })

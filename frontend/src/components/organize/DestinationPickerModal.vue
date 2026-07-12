@@ -23,11 +23,14 @@ const visibleRows = computed(() =>
   }),
 )
 
-/** The path Choose will commit: the selected folder plus an optional new segment. */
+/** The path Choose will commit. The input accepts a folder name, a nested
+ * subpath (appended to the tree selection), or a full absolute path — the
+ * backend still validates it sits inside a scan root. */
 const chosenPath = computed(() => {
+  const entry = newFolderName.value.trim()
+  if (newFolderOpen.value && entry.startsWith('/')) return entry.replace(/\/+$/, '')
   const base = selected.value
-  const segment = newFolderName.value.trim()
-  return newFolderOpen.value && segment ? `${base}/${segment}` : base
+  return newFolderOpen.value && entry ? `${base}/${entry}` : base
 })
 
 function toggleExpanded(path: string, event: Event): void {
@@ -37,22 +40,27 @@ function toggleExpanded(path: string, event: Event): void {
   expanded.value = next
 }
 
-function validSegment(segment: string): string | null {
-  if (!segment) return 'Folder name is required'
-  if (segment.includes('/')) return 'Folder names cannot contain “/”'
-  if (segment.startsWith('.')) return 'Folder names cannot start with “.”'
+function validEntry(entry: string): string | null {
+  if (!entry) return 'Folder name is required'
+  const segments = entry.replace(/^\/+|\/+$/g, '').split('/')
+  for (const segment of segments) {
+    if (!segment) return 'Path contains an empty folder name'
+    if (segment.startsWith('.')) return 'Folder names cannot start with “.”'
+  }
   return null
 }
 
 function choose(): void {
-  if (newFolderOpen.value) {
-    const problem = validSegment(newFolderName.value.trim())
+  const entry = newFolderName.value.trim()
+  if (newFolderOpen.value && entry) {
+    const problem = validEntry(entry)
     if (problem) {
       newFolderError.value = problem
       return
     }
   }
-  if (!selected.value) return
+  // An absolute path stands on its own; otherwise a tree selection is needed.
+  if (!entry.startsWith('/') && !selected.value) return
   store.destination = chosenPath.value
   store.pickerOpen = false
 }
@@ -102,7 +110,7 @@ function choose(): void {
           v-model="newFolderName"
           class="new-input"
           type="text"
-          placeholder="Folder name"
+          placeholder="Folder name or /full/path"
           aria-label="New folder name"
           @input="newFolderError = null"
           @keydown.enter.prevent="choose"
