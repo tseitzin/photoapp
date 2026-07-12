@@ -80,9 +80,7 @@ def test_restore_reforms_an_exact_group(client: TestClient, tmp_path: Path) -> N
     client.post("/api/quarantine", json={"photo_ids": [victim]})
     assert _exact_group(client) is None  # dissolved
 
-    assert (
-        client.post("/api/quarantine/restore", json={"photo_ids": [victim]}).status_code == 200
-    )
+    assert client.post("/api/quarantine/restore", json={"photo_ids": [victim]}).status_code == 200
 
     regrouped = _exact_group(client)
     assert regrouped is not None
@@ -98,9 +96,7 @@ def test_permanent_delete_of_a_grouped_then_quarantined_photo_succeeds(
     victim = _exact_group(client)["members"][0]["photo"]["id"]  # type: ignore[index]
     client.post("/api/quarantine", json={"photo_ids": [victim]})
 
-    deleted = client.post(
-        "/api/quarantine/delete", json={"photo_ids": [victim], "confirm": True}
-    )
+    deleted = client.post("/api/quarantine/delete", json={"photo_ids": [victim], "confirm": True})
 
     assert deleted.status_code == 200
     assert deleted.json()["succeeded"] == 1

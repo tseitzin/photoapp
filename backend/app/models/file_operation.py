@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-FILE_OPS = ("quarantine", "restore", "delete")
+FILE_OPS = ("quarantine", "restore", "delete", "organize")
 
 
 class FileOperation(Base):

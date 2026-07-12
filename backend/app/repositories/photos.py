@@ -112,6 +112,30 @@ class PhotoRepository:
             .order_by(Photo.path)
         ).all()
 
+    def list_active_under(self, folders: Sequence[str]) -> Sequence[Photo]:
+        """Active photos under any of the given folders, in stable path order."""
+        if not folders:
+            return []
+        return self._session.scalars(
+            select(Photo)
+            .where(
+                Photo.status == "active",
+                or_(*[Photo.path.like(f"{folder.rstrip('/')}/%") for folder in folders]),
+            )
+            .order_by(Photo.path)
+        ).all()
+
+    def paths_under(self, prefix: str) -> set[str]:
+        """Every indexed path under a directory, regardless of photo status.
+
+        Quarantined/missing rows keep their old paths and photos.path is UNIQUE,
+        so destination planning must treat those paths as occupied too.
+        """
+        normalized = prefix.rstrip("/")
+        return set(
+            self._session.scalars(select(Photo.path).where(Photo.path.like(f"{normalized}/%")))
+        )
+
     def list_page(
         self,
         limit: int,

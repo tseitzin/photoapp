@@ -42,6 +42,23 @@ class DuplicateRepository:
         ).all()
         return groups, total
 
+    def non_keeper_exact_member_ids(self, photo_ids: Sequence[int]) -> set[int]:
+        """Of the given photos, those that are redundant copies in an exact group
+        (members that are not the group's keeper)."""
+        if not photo_ids:
+            return set()
+        return set(
+            self._session.scalars(
+                select(DuplicateGroupMember.photo_id)
+                .join(DuplicateGroup, DuplicateGroup.id == DuplicateGroupMember.group_id)
+                .where(
+                    DuplicateGroup.kind == "exact",
+                    DuplicateGroupMember.photo_id.in_(list(photo_ids)),
+                    DuplicateGroupMember.photo_id != DuplicateGroup.keeper_photo_id,
+                )
+            )
+        )
+
     def decisions_for(self, group_id: int) -> dict[int, str]:
         rows = self._session.execute(
             select(DuplicateDecision.photo_id, DuplicateDecision.decision).where(

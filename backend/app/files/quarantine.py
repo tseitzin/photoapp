@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.dedupe.incremental import add_photos_to_groups, remove_photos_from_groups
+from app.files.audit import record_operation
 from app.files.paths import (
     PathValidationError,
     ensure_within,
@@ -73,16 +74,7 @@ class FileManagementService:
         batch_id: str,
         size_bytes: int,
     ) -> None:
-        self._session.add(
-            FileOperation(
-                photo_id=photo_id,
-                op=op,
-                src_path=src,
-                dest_path=dest,
-                batch_id=batch_id,
-                size_bytes=size_bytes,
-            )
-        )
+        record_operation(self._session, photo_id, op, src, dest, batch_id, size_bytes)
 
     def _quarantine_slot(self, source: Path) -> Path:
         # Mirror the absolute path under the quarantine dir: unique + reversible.
