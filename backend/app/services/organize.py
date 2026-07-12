@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -15,12 +16,15 @@ from app.files.organize import (
     execute_organize,
     validate_spec,
 )
+from app.files.paths import resolve_lenient
 from app.jobs.runner import JobRunner
 from app.models import OrganizeRun
 from app.models.organize import ACTIVE_ORGANIZE_STATUSES
 from app.repositories.organize import OrganizeRunRepository
+from app.repositories.scan_roots import ScanRootRepository
 from app.repositories.scans import ScanRepository
 from app.services.errors import ConflictError, NotFoundError
+from app.services.scan_roots import ScanRootService
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +50,25 @@ class OrganizeService:
             raise ConflictError("An organize run is already in progress")
         if self._scans.get_active() is not None:
             raise ConflictError("A scan is in progress — wait for it to finish first")
+        self._ensure_destination_root(spec.destination)
         run = self._runs.create(spec.as_params(), str(uuid4()))
         factory = self._session_factory
         self._runner.submit(f"organize-{run.id}", lambda: execute_organize(run.id, factory))
         return run
+
+    def _ensure_destination_root(self, destination: str) -> None:
+        """Register a destination outside every scan root as a new root, so the
+        organized photos stay indexed. The user picked the folder explicitly —
+        the app does its own bookkeeping rather than bouncing the request."""
+        dest = resolve_lenient(destination)
+        repo = ScanRootRepository(self._session)
+        if any(dest.is_relative_to(Path(root.path)) for root in repo.list_all()):
+            return
+        # add_root requires an existing directory (the executor would create it
+        # anyway); an empty dir is harmless if the run later fails or is empty.
+        dest.mkdir(parents=True, exist_ok=True)
+        ScanRootService(repo).add_root(str(dest))
+        logger.info("registered organize destination as a scan root: %s", dest)
 
     def get(self, run_id: int) -> OrganizeRun:
         run = self._runs.get(run_id)

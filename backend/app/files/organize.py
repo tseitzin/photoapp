@@ -21,6 +21,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.files.audit import record_operation
 from app.files.paths import (
     PathValidationError,
@@ -91,11 +92,19 @@ class OrganizePlan:
     undated: int
     est_bytes: int
     rename_example: tuple[str, str] | None
+    # True when the destination lies outside every scan root today — starting
+    # the run will register it so the moved photos stay in the Library.
+    destination_new_root: bool
 
 
 def validate_spec(session: Session, spec: OrganizeSpec) -> tuple[Path, list[Path]]:
     """Cheap up-front checks shared by preview and start. Returns
-    (resolved destination, approved roots)."""
+    (resolved destination, approved roots).
+
+    The destination may lie outside the approved roots — starting a run
+    registers it as a new scan root automatically (see
+    services/organize.py::_ensure_destination_root), so organized photos stay
+    indexed. Only the quarantine folder is off-limits."""
     if spec.mode not in MODES:
         raise ValidationFailedError(f"Unknown organize mode: {spec.mode}")
     if not spec.folders:
@@ -104,8 +113,10 @@ def validate_spec(session: Session, spec: OrganizeSpec) -> tuple[Path, list[Path
     if not roots:
         raise ValidationFailedError("No scan roots configured")
     destination = resolve_lenient(spec.destination)
+    quarantine = resolve_lenient(str(get_settings().quarantine_dir))
+    if destination.is_relative_to(quarantine):
+        raise ValidationFailedError("Destination cannot be inside the quarantine folder")
     try:
-        ensure_within(destination, roots, "Destination")
         for folder in spec.folders:
             ensure_within(resolve_lenient(folder), roots, "Selected folder")
     except PathValidationError as exc:
@@ -114,7 +125,8 @@ def validate_spec(session: Session, spec: OrganizeSpec) -> tuple[Path, list[Path
 
 
 def build_plan(session: Session, spec: OrganizeSpec) -> OrganizePlan:
-    destination, _ = validate_spec(session, spec)
+    destination, roots = validate_spec(session, spec)
+    destination_new_root = not any(destination.is_relative_to(root) for root in roots)
     folders = _normalize_folders(spec.folders)
     photos = PhotoRepository(session).list_active_under(folders)
     duplicate_ids = DuplicateRepository(session).non_keeper_exact_member_ids(
@@ -160,6 +172,7 @@ def build_plan(session: Session, spec: OrganizeSpec) -> OrganizePlan:
         undated=undated,
         est_bytes=est_bytes,
         rename_example=rename_example,
+        destination_new_root=destination_new_root,
     )
 
 

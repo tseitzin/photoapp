@@ -31,6 +31,9 @@ class OrganizePreviewRead(BaseModel):
     # First few planned destinations, one per distinct target directory.
     example_paths: list[str]
     rename_example: RenameExample | None
+    # Destination is outside every scan root today; starting the run will
+    # register it automatically so the moved photos stay in the Library.
+    destination_new_root: bool
 
 
 class OrganizeRunRead(BaseModel):

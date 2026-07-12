@@ -60,6 +60,7 @@ function preview(overrides: Partial<OrganizePreview> = {}): OrganizePreview {
     est_bytes: 1000,
     example_paths: ['/lib/Organized/2024/07/a.jpg'],
     rename_example: null,
+    destination_new_root: false,
     ...overrides,
   }
 }

@@ -58,6 +58,7 @@ function preview(overrides: Partial<OrganizePreview> = {}): OrganizePreview {
     est_bytes: 2048,
     example_paths: ['/lib/Organized/2024/07/a.jpg'],
     rename_example: { old: 'IMG_1.jpg', new: '2024-07-15_143022.jpg' },
+    destination_new_root: false,
     ...overrides,
   }
 }
@@ -120,6 +121,19 @@ describe('OrganizeView', () => {
 
     expect(wrapper.find('.help').text()).toContain('Year / Month')
     expect(wrapper.find('.help').text()).toContain('Undated/')
+  })
+
+  it('tells the user when the destination will be added to the library', async () => {
+    const library = useLibraryStore()
+    library.folders = [folder('/lib/inbox')]
+    library.toggleChecked('/lib/inbox')
+    const organize = useOrganizeStore()
+    organize.preview = preview({ destination_new_root: true })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.new-root-note').text()).toContain('added automatically')
   })
 
   it('shows the rename example from the preview', async () => {

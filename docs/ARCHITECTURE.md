@@ -199,6 +199,12 @@ skip-duplicates (only the exact-group keeper moves).
   `POST /api/organize/preview` (dry-run) and the execute job both call it, so the
   preview the user approves is what runs. Planning is pure DB work — three indexed
   queries, zero per-file disk access — so previews stay sub-second at 50k+ photos.
+- The user may pick **any** destination folder. If it lies outside the indexed
+  scan roots, starting the run registers it as a new root automatically (the
+  preview flags this with `destination_new_root`), so organized photos stay in
+  the Library — the user never manages roots by hand. Guard rails: the
+  quarantine folder is refused, and a destination that *contains* an existing
+  root is refused (409) because it would double-index.
 - Collisions never overwrite: a destination is occupied if claimed in-batch or held
   by **any** photos row (the path column is UNIQUE; quarantined rows keep their old
   paths). The executor re-checks `dest.exists()` right before each move.

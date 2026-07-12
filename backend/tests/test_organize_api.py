@@ -100,7 +100,49 @@ def test_start_refuses_while_another_organize_is_active(
     assert "organize" in response.json()["detail"].lower()
 
 
-def test_start_rejects_a_destination_outside_scan_roots(client: TestClient, tmp_path: Path) -> None:
+def test_start_registers_an_outside_destination_and_organizes_into_it(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    library = tmp_path / "library"
+    make_image(library / "inbox" / "a.jpg", exif_ifd_fields=CAPTURED)
+    _index(client, library)
+    destination = tmp_path / "elsewhere"
+
+    response = client.post(
+        "/api/organize",
+        json={
+            "folders": [str(library / "inbox")],
+            "destination": str(destination),
+            "mode": "date",
+        },
+    )
+
+    assert response.status_code == 202
+    db_session.expire_all()
+    root_paths = [r["path"] for r in client.get("/api/scan-roots").json()]
+    assert str(destination) in root_paths  # registered automatically
+    assert (destination / "2024" / "07" / "a.jpg").is_file()
+
+
+def test_preview_flags_a_destination_that_would_become_a_new_root(
+    client: TestClient, tmp_path: Path
+) -> None:
+    library = tmp_path / "library"
+    make_image(library / "inbox" / "a.jpg")
+    _index(client, library)
+
+    body = _request(library, destination=str(tmp_path / "elsewhere"))
+    body["folders"] = [str(library / "inbox")]
+    preview = client.post("/api/organize/preview", json=body).json()
+
+    assert preview["destination_new_root"] is True
+    # a dry run registers nothing
+    assert [r["path"] for r in client.get("/api/scan-roots").json()] == [str(library)]
+
+
+def test_start_refuses_a_destination_that_contains_an_existing_root(
+    client: TestClient, tmp_path: Path
+) -> None:
     library = tmp_path / "library"
     make_image(library / "inbox" / "a.jpg")
     _index(client, library)
@@ -109,13 +151,13 @@ def test_start_rejects_a_destination_outside_scan_roots(client: TestClient, tmp_
         "/api/organize",
         json={
             "folders": [str(library / "inbox")],
-            "destination": str(tmp_path / "elsewhere"),
+            "destination": str(tmp_path),  # parent of the library root
             "mode": "date",
         },
     )
 
-    assert response.status_code == 422
-    assert client.get("/api/organize").json() == []  # no failed run created
+    assert response.status_code == 409
+    assert "contains the existing scan root" in response.json()["detail"]
 
 
 def test_interrupted_runs_are_recovered_as_failed_on_startup(

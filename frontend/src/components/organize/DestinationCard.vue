@@ -43,6 +43,10 @@ const help = computed(() => HELP[store.mode])
       </button>
     </div>
     <p class="help">{{ help }}</p>
+    <p v-if="store.preview?.destination_new_root" class="new-root-note">
+      This folder isn’t in your library yet — it will be added automatically when you organize,
+      so the moved photos stay visible.
+    </p>
   </section>
 </template>
 
@@ -135,6 +139,16 @@ const help = computed(() => HELP[store.mode])
   margin: 0;
   font-size: 12px;
   color: var(--sub);
+  line-height: 1.5;
+}
+
+.new-root-note {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--success-soft);
+  color: var(--success-fg);
+  font-size: 12px;
   line-height: 1.5;
 }
 </style>

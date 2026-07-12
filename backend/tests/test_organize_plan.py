@@ -239,15 +239,41 @@ def test_collision_with_a_quarantined_photos_db_path_gets_a_suffix(
     ]
 
 
-def test_destination_outside_scan_roots_is_rejected(
+def test_destination_outside_scan_roots_is_flagged_as_a_new_root(
     client: TestClient, db_session: Session, tmp_path: Path
 ) -> None:
     library = tmp_path / "library"
-    make_image(library / "inbox" / "a.jpg")
+    make_image(library / "inbox" / "a.png")
     _index(client, library)
 
-    with pytest.raises(ValidationFailedError, match="outside approved"):
-        build_plan(
-            db_session,
-            _spec(library, [library / "inbox"], destination=str(tmp_path / "elsewhere")),
-        )
+    plan = build_plan(
+        db_session,
+        _spec(library, [library / "inbox"], destination=str(tmp_path / "elsewhere")),
+    )
+
+    assert plan.destination_new_root is True
+    assert [move.dest for move in plan.moves] == [str(tmp_path / "elsewhere" / "Undated" / "a.png")]
+
+
+def test_destination_inside_a_scan_root_is_not_flagged(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    make_image(tmp_path / "inbox" / "a.png")
+    _index(client, tmp_path)
+
+    plan = build_plan(db_session, _spec(tmp_path, [tmp_path / "inbox"]))
+
+    assert plan.destination_new_root is False
+
+
+def test_destination_inside_the_quarantine_folder_is_rejected(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    from app.core.config import get_settings
+
+    make_image(tmp_path / "inbox" / "a.png")
+    _index(client, tmp_path)
+    quarantined_dest = str(get_settings().quarantine_dir / "sneaky")
+
+    with pytest.raises(ValidationFailedError, match="quarantine"):
+        build_plan(db_session, _spec(tmp_path, [tmp_path / "inbox"], destination=quarantined_dest))

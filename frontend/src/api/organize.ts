@@ -26,6 +26,9 @@ export interface OrganizePreview {
   est_bytes: number
   example_paths: string[]
   rename_example: RenameExample | null
+  // Destination is outside the indexed folders; organizing will add it
+  // automatically so the moved photos stay in the Library.
+  destination_new_root: boolean
 }
 
 export interface OrganizeRun {

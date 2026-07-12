@@ -62,6 +62,7 @@ def _preview_read(plan: OrganizePlan) -> OrganizePreviewRead:
         est_bytes=plan.est_bytes,
         example_paths=_example_paths(plan.moves),
         rename_example=rename_example,
+        destination_new_root=plan.destination_new_root,
     )
 
 
