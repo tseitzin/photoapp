@@ -16,7 +16,7 @@ export interface BatchResult {
 export interface FileOperation {
   id: number
   photo_id: number | null
-  op: 'quarantine' | 'restore' | 'delete'
+  op: 'quarantine' | 'restore' | 'delete' | 'organize'
   src_path: string
   dest_path: string | null
   batch_id: string

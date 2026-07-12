@@ -181,6 +181,18 @@ export const useLibraryStore = defineStore('library', () => {
     checkedFolders.value = next
   }
 
+  /** Uncheck a folder and every checked folder nested inside it. */
+  function uncheckSubtree(path: string): void {
+    const next = new Set(
+      [...checkedFolders.value].filter((p) => p !== path && !p.startsWith(`${path}/`)),
+    )
+    checkedFolders.value = next
+  }
+
+  function clearChecked(): void {
+    checkedFolders.value = new Set()
+  }
+
   function toggleType(value: string): Promise<void> {
     const index = filters.types.indexOf(value)
     if (index === -1) filters.types.push(value)
@@ -278,6 +290,7 @@ export const useLibraryStore = defineStore('library', () => {
     facets,
     expanded,
     checkedFolders,
+    checkedTopLevel,
     checkedTotals,
     selectedPhotoId,
     selectedPhoto,
@@ -291,12 +304,15 @@ export const useLibraryStore = defineStore('library', () => {
     hasActiveFilters,
     init,
     reload,
+    loadFolders,
     goToPage,
     nextPage,
     prevPage,
     setPageSize,
     toggleExpanded,
     toggleChecked,
+    uncheckSubtree,
+    clearChecked,
     toggleType,
     toggleCamera,
     setSearch,
