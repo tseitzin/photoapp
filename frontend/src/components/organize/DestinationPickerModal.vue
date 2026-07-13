@@ -46,6 +46,10 @@ function validEntry(entry: string): string | null {
   for (const segment of segments) {
     if (!segment) return 'Path contains an empty folder name'
     if (segment.startsWith('.')) return 'Folder names cannot start with “.”'
+    // A colon is never a real folder name — it's usually pasted text
+    // (e.g. an error message), which once created a junk destination.
+    if (segment.includes(':')) return 'Folder names cannot contain “:”'
+    if (segment !== segment.trim()) return 'Folder names cannot start or end with spaces'
   }
   return null
 }

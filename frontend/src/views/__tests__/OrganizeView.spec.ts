@@ -210,6 +210,14 @@ describe('OrganizeView', () => {
     expect(wrapper.find('.error').text()).toContain('cannot start with')
     expect(organize.pickerOpen).toBe(true)
 
+    // pasted error-message text (colons, trailing spaces) is rejected
+    await wrapper
+      .find('.new-input')
+      .setValue('Destination is outside approved directories: /Volumes/TimDrive/Updated')
+    await wrapper.find('.choose').trigger('click')
+    expect(wrapper.find('.error').text()).toContain('“:”')
+    expect(organize.pickerOpen).toBe(true)
+
     // a valid segment is appended to the selected folder
     await wrapper.find('.new-input').setValue('Organized')
     await wrapper.find('.choose').trigger('click')
