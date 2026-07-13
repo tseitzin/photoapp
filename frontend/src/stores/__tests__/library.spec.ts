@@ -163,6 +163,36 @@ describe('library store', () => {
     expect(listPhotosMock).toHaveBeenLastCalledWith(expect.objectContaining({ types: [] }))
   })
 
+  it('selecting a folder filters the grid to it and reselecting clears it', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 1))
+    const store = useLibraryStore()
+
+    await store.setFolder('/lib/Updated/2006')
+
+    expect(store.activeFolder).toBe('/lib/Updated/2006')
+    expect(listPhotosMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ folder: '/lib/Updated/2006', offset: 0 }),
+    )
+
+    await store.setFolder('/lib/Updated/2006') // same folder toggles back to all
+    expect(store.activeFolder).toBeNull()
+    expect(listPhotosMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ folder: undefined }),
+    )
+  })
+
+  it('clearing filters also clears the folder selection', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 1))
+    const store = useLibraryStore()
+    await store.setFolder('/lib/Updated')
+    expect(store.hasActiveFilters).toBe(true)
+
+    await store.clearFilters()
+
+    expect(store.activeFolder).toBeNull()
+    expect(store.hasActiveFilters).toBe(false)
+  })
+
   it('records an error and clears results when the API is unreachable', async () => {
     listPhotosMock.mockRejectedValue(new Error('ECONNREFUSED'))
     const store = useLibraryStore()

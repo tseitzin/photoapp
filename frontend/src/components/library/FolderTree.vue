@@ -27,11 +27,12 @@ const visibleRows = computed<FolderNode[]>(() => {
         v-for="node in visibleRows"
         :key="node.path"
         class="row"
+        :class="{ 'row--active': store.activeFolder === node.path }"
         :style="{ paddingLeft: `${12 + node.depth * 18}px` }"
         role="treeitem"
         :aria-expanded="node.has_children ? store.expanded.has(node.path) : undefined"
-        :aria-selected="store.checkedFolders.has(node.path)"
-        @click="store.toggleChecked(node.path)"
+        :aria-selected="store.activeFolder === node.path"
+        @click="store.setFolder(node.path)"
       >
         <span
           class="chevron"
@@ -39,7 +40,14 @@ const visibleRows = computed<FolderNode[]>(() => {
         >
           {{ node.has_children ? (store.expanded.has(node.path) ? '▾' : '▸') : '' }}
         </span>
-        <span class="checkbox" :class="{ 'checkbox--on': store.checkedFolders.has(node.path) }">
+        <span
+          class="checkbox"
+          :class="{ 'checkbox--on': store.checkedFolders.has(node.path) }"
+          role="checkbox"
+          :aria-checked="store.checkedFolders.has(node.path)"
+          :aria-label="`Select ${node.name} for organizing`"
+          @click.stop="store.toggleChecked(node.path)"
+        >
           {{ store.checkedFolders.has(node.path) ? '✓' : '' }}
         </span>
         <span class="marker" aria-hidden="true" />
@@ -98,6 +106,15 @@ const visibleRows = computed<FolderNode[]>(() => {
 
 .row:hover {
   background: var(--hover);
+}
+
+.row--active {
+  background: var(--sel-chip-bg);
+  color: var(--sel-chip-fg);
+}
+
+.row--active .count {
+  color: var(--sel-chip-fg);
 }
 
 .chevron {

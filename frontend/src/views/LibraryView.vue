@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { PhotoSort } from '@/api/photos'
 import FilterPanel from '@/components/library/FilterPanel.vue'
 import FolderTree from '@/components/library/FolderTree.vue'
@@ -37,6 +37,11 @@ async function withScrollReset(action: () => Promise<void>): Promise<void> {
   await action()
   gridScroll.value?.scrollTo({ top: 0 })
 }
+
+const breadcrumb = computed(() => {
+  if (!store.activeFolder) return 'All photos'
+  return store.activeFolder.split('/').pop() ?? store.activeFolder
+})
 </script>
 
 <template>
@@ -47,7 +52,16 @@ async function withScrollReset(action: () => Promise<void>): Promise<void> {
 
     <section class="center">
       <div class="subheader">
-        <span class="breadcrumb">All photos</span>
+        <span class="breadcrumb" :title="store.activeFolder ?? undefined">{{ breadcrumb }}</span>
+        <button
+          v-if="store.activeFolder"
+          type="button"
+          class="breadcrumb-clear"
+          aria-label="Show all photos"
+          @click="store.setFolder(null)"
+        >
+          × All photos
+        </button>
         <span class="total">{{ formatCount(store.total) }} photos</span>
         <RouterLink v-if="store.markedOnPage > 0" to="/quarantine" class="marked-link">
           🗑 {{ formatCount(store.markedOnPage) }} marked · review →
@@ -190,6 +204,20 @@ async function withScrollReset(action: () => Promise<void>): Promise<void> {
 
 .breadcrumb {
   font-weight: 600;
+}
+
+.breadcrumb-clear {
+  border: 0;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: var(--chip);
+  color: var(--sub);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.breadcrumb-clear:hover {
+  color: var(--fg);
 }
 
 .total {

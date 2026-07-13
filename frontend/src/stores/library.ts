@@ -42,6 +42,9 @@ export const useLibraryStore = defineStore('library', () => {
   const facets = ref<Facets | null>(null)
   const expanded = ref(new Set<string>())
   const checkedFolders = ref(new Set<string>())
+  // Clicking a folder name filters the grid to it (recursive); the checkbox
+  // is the separate "selected for organizing" state.
+  const activeFolder = ref<string | null>(null)
   const selectedPhotoId = ref<number | null>(null)
   const lightboxOpen = ref(false)
   const lightboxIndex = ref(0)
@@ -63,7 +66,11 @@ export const useLibraryStore = defineStore('library', () => {
     () => photos.value.find((p) => p.id === selectedPhotoId.value) ?? null,
   )
   const hasActiveFilters = computed(
-    () => filters.types.length > 0 || filters.cameras.length > 0 || filters.q !== '',
+    () =>
+      filters.types.length > 0 ||
+      filters.cameras.length > 0 ||
+      filters.q !== '' ||
+      activeFolder.value !== null,
   )
 
   /** Checked folders excluding those covered by a checked ancestor (no double counting). */
@@ -87,6 +94,7 @@ export const useLibraryStore = defineStore('library', () => {
     return listPhotos({
       limit,
       offset,
+      folder: activeFolder.value ?? undefined,
       types: filters.types,
       cameras: filters.cameras,
       q: filters.q || undefined,
@@ -175,6 +183,12 @@ export const useLibraryStore = defineStore('library', () => {
     expanded.value = next
   }
 
+  /** Filter the grid to a folder (recursive); clicking it again shows all photos. */
+  function setFolder(path: string | null): Promise<void> {
+    activeFolder.value = activeFolder.value === path ? null : path
+    return reload()
+  }
+
   function toggleChecked(path: string): void {
     const next = new Set(checkedFolders.value)
     if (!next.delete(path)) next.add(path)
@@ -216,6 +230,7 @@ export const useLibraryStore = defineStore('library', () => {
     filters.types = []
     filters.cameras = []
     filters.q = ''
+    activeFolder.value = null
     return reload()
   }
 
@@ -292,6 +307,7 @@ export const useLibraryStore = defineStore('library', () => {
     checkedFolders,
     checkedTopLevel,
     checkedTotals,
+    activeFolder,
     selectedPhotoId,
     selectedPhoto,
     lightboxOpen,
@@ -311,6 +327,7 @@ export const useLibraryStore = defineStore('library', () => {
     setPageSize,
     toggleExpanded,
     toggleChecked,
+    setFolder,
     uncheckSubtree,
     clearChecked,
     toggleType,
