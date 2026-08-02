@@ -266,6 +266,41 @@ def test_destination_inside_a_scan_root_is_not_flagged(
     assert plan.destination_new_root is False
 
 
+def test_destination_inside_a_source_folder_is_flagged(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    """The real-world misfire: organizing a folder into a subfolder of itself."""
+    make_image(tmp_path / "trip" / "a.png")
+    _index(client, tmp_path)
+
+    plan = build_plan(
+        db_session,
+        _spec(
+            tmp_path,
+            [tmp_path / "trip"],
+            mode="keep",
+            destination=str(tmp_path / "trip" / "Organized"),
+        ),
+    )
+
+    assert plan.destination_inside_source is True
+    # Flagged, never blocked — the moves are still planned.
+    assert [move.dest for move in plan.moves] == [
+        str(tmp_path / "trip" / "Organized" / "trip" / "a.png")
+    ]
+
+
+def test_destination_beside_the_source_folder_is_not_flagged(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    make_image(tmp_path / "trip" / "a.png")
+    _index(client, tmp_path)
+
+    plan = build_plan(db_session, _spec(tmp_path, [tmp_path / "trip"]))
+
+    assert plan.destination_inside_source is False
+
+
 def test_destination_inside_the_quarantine_folder_is_rejected(
     client: TestClient, db_session: Session, tmp_path: Path
 ) -> None:

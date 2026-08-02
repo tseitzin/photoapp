@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { OrganizeMode } from '@/api/organize'
 import { useOrganizeStore } from '@/stores/organize'
 import { formatBytes, formatCount } from '@/utils/format'
 
@@ -15,10 +16,19 @@ const examples = computed(() => {
   }))
 })
 
+// Spelled out here because the segmented control sits in the other pane —
+// this is the last place the structure choice can be caught before committing.
+const STRUCTURE_LABELS: Record<OrganizeMode, string> = {
+  keep: 'Keep folder names',
+  date: 'Year / Month folders',
+  camera: 'Camera model folders',
+}
+
 const summary = computed(() => {
   const p = store.preview
   if (!p) return []
   const rows = [
+    { k: 'Structure', v: STRUCTURE_LABELS[store.mode] },
     { k: 'Photos moved', v: formatCount(p.planned) },
     { k: 'Duplicates skipped', v: formatCount(p.duplicates_skipped) },
     { k: 'Already organized', v: formatCount(p.already_organized) },
@@ -42,6 +52,9 @@ const applyDisabled = computed(
       <div class="label">PREVIEW</div>
       <div class="big">{{ formatCount(store.preview?.planned ?? 0) }}</div>
       <div class="big-sub">photos will be organized</div>
+
+      <div class="mini-label">Moving into</div>
+      <div class="into" :title="store.destination">{{ store.destination || '—' }}</div>
 
       <template v-if="examples.length">
         <div class="mini-label">Example destinations</div>
@@ -119,6 +132,19 @@ const applyDisabled = computed(
   font-size: 11px;
   color: var(--muted);
   margin-bottom: 8px;
+}
+
+.into {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 11px;
+  margin-bottom: 18px;
+  overflow-wrap: anywhere;
 }
 
 .examples {

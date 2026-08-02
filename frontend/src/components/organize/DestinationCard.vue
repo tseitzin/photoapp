@@ -43,6 +43,10 @@ const help = computed(() => HELP[store.mode])
       </button>
     </div>
     <p class="help">{{ help }}</p>
+    <p v-if="store.preview?.destination_inside_source" class="inside-source-note">
+      This destination is inside a folder you’re organizing — the photos would move into a
+      subfolder of themselves. Pick a folder outside the working set unless that’s intended.
+    </p>
     <p v-if="store.preview?.destination_new_root" class="new-root-note">
       This folder isn’t in your library yet — it will be added automatically when you organize,
       so the moved photos stay visible.
@@ -148,6 +152,16 @@ const help = computed(() => HELP[store.mode])
   border-radius: 8px;
   background: var(--success-soft);
   color: var(--success-fg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.inside-source-note {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+  color: var(--danger);
   font-size: 12px;
   line-height: 1.5;
 }

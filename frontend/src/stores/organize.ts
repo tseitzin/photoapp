@@ -17,15 +17,46 @@ const POLL_MS = 1000
 // The preview is a server round-trip; settle before recomputing it.
 const PREVIEW_DEBOUNCE_MS = 300
 
+// Where the last run sent photos, and how. Remembered across sessions because
+// the choice is stable: recomputing a default on each visit once silently
+// retargeted a run at a folder the user had just added.
+export const ORGANIZE_PREFS_KEY = 'aperture-organize-prefs'
+
+const MODES: OrganizeMode[] = ['keep', 'date', 'camera']
+
+function storedPrefs(): {
+  destination?: string
+  mode?: OrganizeMode
+  rename?: boolean
+  skipDuplicates?: boolean
+} {
+  try {
+    const raw = localStorage.getItem(ORGANIZE_PREFS_KEY)
+    if (!raw) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const p = parsed as Record<string, unknown>
+    return {
+      destination: typeof p.destination === 'string' ? p.destination : undefined,
+      mode: MODES.includes(p.mode as OrganizeMode) ? (p.mode as OrganizeMode) : undefined,
+      rename: typeof p.rename === 'boolean' ? p.rename : undefined,
+      skipDuplicates: typeof p.skipDuplicates === 'boolean' ? p.skipDuplicates : undefined,
+    }
+  } catch {
+    return {} // unreadable or corrupt storage falls back to defaults
+  }
+}
+
 export type OrganizePhase = 'setup' | 'running' | 'done'
 
 export const useOrganizeStore = defineStore('organize', () => {
   const library = useLibraryStore()
+  const saved = storedPrefs()
 
-  const destination = ref('')
-  const mode = ref<OrganizeMode>('keep')
-  const rename = ref(false)
-  const skipDuplicates = ref(true)
+  const destination = ref(saved.destination ?? '')
+  const mode = ref<OrganizeMode>(saved.mode ?? 'keep')
+  const rename = ref(saved.rename ?? false)
+  const skipDuplicates = ref(saved.skipDuplicates ?? true)
   const preview = ref<OrganizePreview | null>(null)
   const previewLoading = ref(false)
   const error = ref<string | null>(null)
@@ -56,9 +87,15 @@ export const useOrganizeStore = defineStore('organize', () => {
     return Math.min(100, Math.round((run.moved / run.planned) * 100))
   })
 
+  /** First-run fallback only — once the user picks a destination it is
+   * remembered. Prefer an existing "Organized"-style root over whichever
+   * folder happens to sort first, which is an arbitrary choice. */
   function defaultDestination(): string {
-    const root = library.folders.find((node) => node.depth === 0)
-    return root ? `${root.path}/Organized` : ''
+    const roots = library.folders.filter((node) => node.depth === 0)
+    const organized = roots.find((node) => node.path.endsWith('/Organized'))
+    if (organized) return organized.path
+    const first = roots[0]
+    return first ? `${first.path}/Organized` : ''
   }
 
   async function load(): Promise<void> {
@@ -109,7 +146,24 @@ export const useOrganizeStore = defineStore('organize', () => {
   // preview after the debounce; requestBody covers them all.
   watch(requestBody, () => {
     if (phase.value === 'setup') schedulePreview()
+    persistPrefs()
   })
+
+  function persistPrefs(): void {
+    try {
+      localStorage.setItem(
+        ORGANIZE_PREFS_KEY,
+        JSON.stringify({
+          destination: destination.value,
+          mode: mode.value,
+          rename: rename.value,
+          skipDuplicates: skipDuplicates.value,
+        }),
+      )
+    } catch {
+      /* storage full or blocked: preferences just won't persist */
+    }
+  }
 
   async function apply(): Promise<void> {
     error.value = null

@@ -59,6 +59,7 @@ function preview(overrides: Partial<OrganizePreview> = {}): OrganizePreview {
     example_paths: ['/lib/Organized/2024/07/a.jpg'],
     rename_example: { old: 'IMG_1.jpg', new: '2024-07-15_143022.jpg' },
     destination_new_root: false,
+    destination_inside_source: false,
     ...overrides,
   }
 }
@@ -134,6 +135,36 @@ describe('OrganizeView', () => {
     await flushPromises()
 
     expect(wrapper.find('.new-root-note').text()).toContain('added automatically')
+  })
+
+  it('warns when the destination is inside a folder being organized', async () => {
+    const library = useLibraryStore()
+    library.folders = [folder('/lib/trip')]
+    library.toggleChecked('/lib/trip')
+    const organize = useOrganizeStore()
+    organize.destination = '/lib/trip/Organized'
+    organize.preview = preview({ destination_inside_source: true })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.inside-source-note').text()).toContain('subfolder of themselves')
+  })
+
+  it('states the destination and structure where the user commits', async () => {
+    const library = useLibraryStore()
+    library.folders = [folder('/lib/inbox')]
+    library.toggleChecked('/lib/inbox')
+    const organize = useOrganizeStore()
+    organize.destination = '/lib/Updated'
+    organize.mode = 'date'
+    organize.preview = preview()
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.into').text()).toBe('/lib/Updated')
+    expect(wrapper.text()).toContain('Year / Month folders')
   })
 
   it('shows the rename example from the preview', async () => {

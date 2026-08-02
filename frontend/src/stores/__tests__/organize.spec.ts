@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useOrganizeStore } from '../organize'
+import { ORGANIZE_PREFS_KEY, useOrganizeStore } from '../organize'
 import { useLibraryStore } from '../library'
 import { getOrganizeRun, listOrganizeRuns, previewOrganize, startOrganize } from '@/api/organize'
 import type { OrganizePreview, OrganizeRun } from '@/api/organize'
@@ -61,6 +61,7 @@ function preview(overrides: Partial<OrganizePreview> = {}): OrganizePreview {
     example_paths: ['/lib/Organized/2024/07/a.jpg'],
     rename_example: null,
     destination_new_root: false,
+    destination_inside_source: false,
     ...overrides,
   }
 }
@@ -102,6 +103,7 @@ function checkFolders(...paths: string[]) {
 
 describe('organize store', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     vi.useFakeTimers()
     previewMock.mockReset()
@@ -204,6 +206,58 @@ describe('organize store', () => {
   it('load derives a default destination from the first root folder', async () => {
     const library = useLibraryStore()
     library.folders = [folder('/lib', { depth: 0, has_children: true })]
+    const store = useOrganizeStore()
+
+    await store.load()
+
+    expect(store.destination).toBe('/lib/Organized')
+  })
+
+  it('remembers the destination and mode for the next visit', async () => {
+    checkFolders('/lib/inbox')
+    const first = useOrganizeStore()
+    first.destination = '/lib/Updated'
+    first.mode = 'date'
+    await vi.advanceTimersByTimeAsync(400)
+
+    // A fresh app session (new pinia, same storage) restores the choice.
+    setActivePinia(createPinia())
+    const next = useOrganizeStore()
+
+    expect(next.destination).toBe('/lib/Updated')
+    expect(next.mode).toBe('date')
+  })
+
+  it('falls back to defaults when stored preferences are corrupt', () => {
+    localStorage.setItem(ORGANIZE_PREFS_KEY, '{not json')
+
+    const store = useOrganizeStore()
+
+    expect(store.destination).toBe('')
+    expect(store.mode).toBe('keep')
+    expect(store.skipDuplicates).toBe(true)
+  })
+
+  it('discarding the working set keeps the remembered destination', async () => {
+    checkFolders('/lib/inbox')
+    const store = useOrganizeStore()
+    store.destination = '/lib/Updated'
+    store.mode = 'date'
+    await vi.advanceTimersByTimeAsync(400)
+
+    store.discard()
+
+    expect(store.destination).toBe('/lib/Updated')
+    expect(store.mode).toBe('date')
+    expect(store.workingSet).toEqual([])
+  })
+
+  it('first run prefers an existing Organized root over whichever sorts first', async () => {
+    const library = useLibraryStore()
+    library.folders = [
+      folder('/lib/Archive', { depth: 0 }),
+      folder('/lib/Organized', { depth: 0 }),
+    ]
     const store = useOrganizeStore()
 
     await store.load()

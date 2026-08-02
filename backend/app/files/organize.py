@@ -95,6 +95,9 @@ class OrganizePlan:
     # True when the destination lies outside every scan root today — starting
     # the run will register it so the moved photos stay in the Library.
     destination_new_root: bool
+    # True when the destination sits inside a folder being organized, so photos
+    # move into a subfolder of themselves. Legal, but rarely intended.
+    destination_inside_source: bool
 
 
 def validate_spec(session: Session, spec: OrganizeSpec) -> tuple[Path, list[Path]]:
@@ -128,6 +131,7 @@ def build_plan(session: Session, spec: OrganizeSpec) -> OrganizePlan:
     destination, roots = validate_spec(session, spec)
     destination_new_root = not any(destination.is_relative_to(root) for root in roots)
     folders = _normalize_folders(spec.folders)
+    destination_inside_source = any(destination.is_relative_to(folder) for folder in folders)
     photos = PhotoRepository(session).list_active_under(folders)
     duplicate_ids = DuplicateRepository(session).non_keeper_exact_member_ids(
         [photo.id for photo in photos]
@@ -173,6 +177,7 @@ def build_plan(session: Session, spec: OrganizeSpec) -> OrganizePlan:
         est_bytes=est_bytes,
         rename_example=rename_example,
         destination_new_root=destination_new_root,
+        destination_inside_source=destination_inside_source,
     )
 
 

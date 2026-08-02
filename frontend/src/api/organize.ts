@@ -29,6 +29,9 @@ export interface OrganizePreview {
   // Destination is outside the indexed folders; organizing will add it
   // automatically so the moved photos stay in the Library.
   destination_new_root: boolean
+  // Destination sits inside a folder being organized — photos would move into
+  // a subfolder of themselves.
+  destination_inside_source: boolean
 }
 
 export interface OrganizeRun {

@@ -34,6 +34,9 @@ class OrganizePreviewRead(BaseModel):
     # Destination is outside every scan root today; starting the run will
     # register it automatically so the moved photos stay in the Library.
     destination_new_root: bool
+    # Destination sits inside a folder being organized — photos would move into
+    # a subfolder of themselves. Surfaced as a warning, never a refusal.
+    destination_inside_source: bool
 
 
 class OrganizeRunRead(BaseModel):
