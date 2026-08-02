@@ -6,10 +6,14 @@ import { formatCount } from '@/utils/format'
 const store = useLibraryStore()
 const emit = defineEmits<{ open: [photoId: number] }>()
 
-// Single click selects (details show in the right panel); double-click opens
+// Single click selects (details show in the right panel); shift extends the
+// run from the last plain click, ⌘/Ctrl toggles one photo. Double-click opens
 // the full-screen lightbox.
-function onTileSelect(photoId: number): void {
-  store.selectPhoto(photoId)
+function onTileClick(photoId: number, event: MouseEvent): void {
+  store.clickPhoto(photoId, {
+    shift: event.shiftKey,
+    toggle: event.metaKey || event.ctrlKey,
+  })
 }
 
 function onTileOpen(photoId: number): void {
@@ -32,7 +36,7 @@ function onTileOpen(photoId: number): void {
           :key="photo.id"
           class="tile"
           :class="{
-            'tile--selected': photo.id === store.selectedPhotoId,
+            'tile--selected': store.selectedIds.has(photo.id),
             'tile--marked': photo.marked_for_deletion,
           }"
         >
@@ -40,12 +44,18 @@ function onTileOpen(photoId: number): void {
             type="button"
             class="tile-img"
             :aria-label="photo.filename"
+            :aria-pressed="store.selectedIds.has(photo.id)"
             :title="`${photo.filename} — double-click to open`"
-            @click="onTileSelect(photo.id)"
+            @click="onTileClick(photo.id, $event)"
             @dblclick="onTileOpen(photo.id)"
           >
             <img :src="thumbnailUrl(photo.id)" :alt="photo.filename" loading="lazy" />
           </button>
+          <!-- The marked ring overrides the selected ring, so selection needs
+               a badge of its own to stay visible on a flagged photo. -->
+          <span v-if="store.selectedIds.has(photo.id)" class="select-badge" aria-hidden="true">
+            ✓
+          </span>
           <button
             type="button"
             class="mark-toggle"
@@ -70,6 +80,8 @@ function onTileOpen(photoId: number): void {
 <style scoped>
 .grid-root {
   padding: 0 18px 24px;
+  /* Shift+click would otherwise drag a text selection across the grid. */
+  user-select: none;
 }
 
 .section-header {
@@ -146,6 +158,21 @@ function onTileOpen(photoId: number): void {
 
 .tile--marked .tile-img img {
   opacity: 0.6;
+}
+
+.select-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .mark-toggle {
