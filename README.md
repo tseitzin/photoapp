@@ -26,6 +26,10 @@ behavior. Vue 3 components recreate the design; the handoff files must never be 
 - **Browse**: Fast thumbnail grid grouped by folder / date / camera, with filtering
   by metadata, filename search, and sort. Click a folder name to filter the grid.
   Full-screen lightbox with instant thumbnail + debounced 2048px preview.
+- **Select in bulk**: Click a photo to select it, **Shift+click** to select the whole
+  run between the two, **⌘/Ctrl+click** to add or remove one. A selection bar shows
+  the count and can mark or unmark the whole set for deletion in one call. Selection
+  is scoped to the loaded page and clears whenever the grid refetches.
 - **Find duplicates**: Exact duplicates (SHA-256) and visually similar photos (perceptual
   hash + LSH). Side-by-side compare and record keep/remove decisions.
 - **Organize**: Physically move selected folders' photos into a destination with
@@ -123,7 +127,7 @@ For complete architectural details, data model, design decisions, and tradeoffs,
 │   │   ├── core/                    # Config (pydantic-settings), structured logging
 │   │   └── main.py                  # FastAPI app initialization
 │   ├── alembic/                     # Database migrations (0001–0012)
-│   ├── tests/                       # pytest (163 tests)
+│   ├── tests/                       # pytest (166 tests)
 │   ├── .env.example                 # Configuration template
 │   ├── requirements.txt             # Dependencies
 │   └── requirements-dev.txt         # Test/lint deps (pytest, ruff, mypy)
@@ -234,7 +238,7 @@ ruff format --check .
 mypy app
 ```
 
-All 163 backend tests use temporary directories and generated images only —
+All 166 backend tests use temporary directories and generated images only —
 they never touch a real photo library.
 
 ### Frontend
@@ -249,7 +253,7 @@ npm run test
 npm run lint && npm run type-check
 ```
 
-All 84 frontend tests run in vitest (isolated, mocked API calls).
+All 111 frontend tests run in vitest (isolated, mocked API calls).
 
 ### Both
 
@@ -426,6 +430,8 @@ batch id, and commits every 200 moves. A crash loses at most one chunk of DB upd
 Nothing is ever deleted automatically. "Delete" is a three-step explicit workflow:
 
 1. **Mark**: User marks photos in the Library (soft flag `photo.marked_for_deletion`).
+   Either one at a time via the 🗑 badge on a tile, or in bulk: select photos in the
+   grid and use the selection bar's "Mark for deletion".
 2. **Quarantine**: `POST /api/quarantine` moves marked files to `QUARANTINE_DIR`
    (reversible, preserves relative path, recorded in audit log).
 3. **Restore or Permanent Delete**: From the Cleanup view, user can restore (move back
@@ -502,9 +508,9 @@ See [TASKS.md](TASKS.md) for detailed per-phase tracking.
 
 | Area | Stack |
 |---|---|
-| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (84 tests) |
+| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (111 tests) |
 | **Styling** | Hand-rolled CSS on design tokens (CSS custom properties); no CSS framework |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (163 tests) |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (166 tests) |
 | **Database** | PostgreSQL 16 (pgvector extension pre-installed for future embeddings) |
 | **Imaging** | Pillow, pillow-heif (HEIC/HEIF), ImageHash (perceptual hash) |
 | **Scanning** | ProcessPoolExecutor for CPU-bound decode/hash work; single-worker thread job runner (DB-persisted state) for coordination |
