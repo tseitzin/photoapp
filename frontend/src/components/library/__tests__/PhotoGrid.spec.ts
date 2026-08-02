@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PhotoGrid from '../PhotoGrid.vue'
+import PhotoTile from '../PhotoTile.vue'
 import { useLibraryStore } from '@/stores/library'
 import { markPhotos, unmarkPhotos } from '@/api/photos'
 import type { PhotoRead } from '@/api/photos'
@@ -149,6 +150,24 @@ describe('PhotoGrid interactions', () => {
     await tiles[1]!.trigger('click')
 
     expect(selection(store)).toEqual([2])
+  })
+
+  it('selecting one photo leaves every other tile untouched', async () => {
+    // Selection reaches tiles as a prop, so a click changes one tile's input
+    // rather than re-diffing the whole grid. At 4,600 tiles that is the
+    // difference between a smooth click and a visible stall.
+    const store = useLibraryStore()
+    store.photos = [photo(1), photo(2), photo(3)]
+    const wrapper = mount(PhotoGrid)
+    const before = wrapper.findAllComponents(PhotoTile).map((t) => t.html())
+
+    await wrapper.findAll('.tile-img')[1]!.trigger('click')
+
+    const after = wrapper.findAllComponents(PhotoTile)
+    expect(after[0]!.html()).toBe(before[0])
+    expect(after[2]!.html()).toBe(before[2])
+    expect(after[1]!.props('selected')).toBe(true)
+    expect(after[0]!.props('selected')).toBe(false)
   })
 
   it('a selected photo shows the selection badge even when it is marked', async () => {
