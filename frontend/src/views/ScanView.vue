@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useScanStore } from '@/stores/scan'
 import { formatCount } from '@/utils/format'
 
@@ -8,6 +8,9 @@ const newRootPath = ref('')
 const addingRoot = ref(false)
 
 onMounted(() => void store.load())
+// The scan keeps running on the server; only this view's 1s poll stops. It
+// resumes from live state via load() when the view comes back.
+onUnmounted(() => store.stopPolling())
 
 async function submitRoot(): Promise<void> {
   const path = newRootPath.value.trim()

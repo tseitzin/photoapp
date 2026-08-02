@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DestinationCard from '@/components/organize/DestinationCard.vue'
 import DestinationPickerModal from '@/components/organize/DestinationPickerModal.vue'
@@ -13,6 +13,9 @@ const store = useOrganizeStore()
 const router = useRouter()
 
 onMounted(() => void store.load())
+// The run continues on the server; only this view's 1s poll stops. load()
+// picks an in-flight run back up when the view returns.
+onUnmounted(() => store.stopPolling())
 
 function discard(): void {
   store.discard()
