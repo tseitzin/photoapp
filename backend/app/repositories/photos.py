@@ -3,9 +3,14 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import BIT
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.models import DuplicateDecision, Photo
+
+# photos.exif averages ~1.3 KB and lives inline in the heap (TOAST holds almost
+# none of it), so it dominates the bytes a list query reads — and PhotoRead
+# doesn't expose it. Only PhotoDetail does, and that goes through get().
+_NO_EXIF = defer(Photo.exif)
 
 # Facet/filter canonicalization: one chip covers equivalent extensions.
 CANONICAL_EXT = {"jpg": "jpeg", "tif": "tiff", "heif": "heic"}
@@ -110,6 +115,7 @@ class PhotoRepository:
                 or_(Photo.marked_for_deletion.is_(True), Photo.id.in_(has_remove_decision)),
             )
             .order_by(Photo.path)
+            .options(_NO_EXIF)
         ).all()
 
     def list_active_under(self, folders: Sequence[str]) -> Sequence[Photo]:
@@ -123,6 +129,7 @@ class PhotoRepository:
                 or_(*[Photo.path.like(f"{folder.rstrip('/')}/%") for folder in folders]),
             )
             .order_by(Photo.path)
+            .options(_NO_EXIF)
         ).all()
 
     def paths_under(self, prefix: str) -> set[str]:
@@ -148,6 +155,7 @@ class PhotoRepository:
             )
             .order_by(Photo.id)
             .limit(limit)
+            .options(_NO_EXIF)  # the backfill re-reads EXIF from the file itself
         ).all()
 
     def count_gps_backfill_remaining(self, after_id: int) -> int:
@@ -193,7 +201,7 @@ class PhotoRepository:
         if q:
             conditions.append(Photo.filename.ilike(f"%{q}%"))
 
-        query = select(Photo).where(*conditions)
+        query = select(Photo).where(*conditions).options(_NO_EXIF)
         total = (
             self._session.scalar(select(func.count()).select_from(Photo).where(*conditions)) or 0
         )

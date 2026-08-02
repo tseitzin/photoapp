@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect
+from sqlalchemy.orm import Session
 
+from app.repositories.photos import PhotoRepository
 from tests.images import make_image
 
 
@@ -24,6 +27,25 @@ def test_lists_indexed_photos_with_pagination(client: TestClient, tmp_path: Path
     assert len(rest["items"]) == 3
     all_ids = {p["id"] for p in page["items"]} | {p["id"] for p in rest["items"]}
     assert len(all_ids) == 5
+
+
+def test_listing_photos_leaves_the_exif_blob_on_the_server(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    """exif is ~1.3 KB inline per row and no list response exposes it.
+
+    Deferring it is only a win if nothing then touches the attribute — that
+    would trade one wide query for a lazy load per row.
+    """
+    make_image(tmp_path / "one.jpg", exif_fields={271: "Sony"})
+    assert client.post("/api/scan-roots", json={"path": str(tmp_path)}).status_code == 201
+    client.post("/api/scans", json={})
+
+    items, _ = PhotoRepository(db_session).list_page(limit=10, offset=0)
+
+    assert items
+    assert "exif" in inspect(items[0]).unloaded
+    assert "exif" not in client.get("/api/photos").json()["items"][0]
 
 
 def test_photo_detail_includes_hash_and_exif(client: TestClient, tmp_path: Path) -> None:
