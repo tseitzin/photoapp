@@ -5,6 +5,7 @@ import FilterPanel from '@/components/library/FilterPanel.vue'
 import FolderTree from '@/components/library/FolderTree.vue'
 import PhotoGrid from '@/components/library/PhotoGrid.vue'
 import PhotoLightbox from '@/components/library/PhotoLightbox.vue'
+import SelectionBar from '@/components/library/SelectionBar.vue'
 import { PAGE_SIZE_OPTIONS, useLibraryStore, type PageSize } from '@/stores/library'
 import { formatCount } from '@/utils/format'
 
@@ -130,6 +131,8 @@ const breadcrumb = computed(() => {
         </div>
         <PhotoGrid v-else @open="store.openLightbox($event)" />
       </div>
+
+      <SelectionBar />
 
       <footer
         v-if="!store.loading && !store.error && store.total > 0"
