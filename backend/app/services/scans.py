@@ -134,10 +134,16 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
                     per_root.append((existing, seen))
             _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
             # Duplicate groups derive from photo state — refresh them while the
-            # scan is still "running" so the UI never sees stale groups.
-            from app.services.duplicates import rebuild_duplicate_groups
+            # scan is still "running" so the UI never sees stale groups. When
+            # the scan touched nothing, that state is unchanged and so are the
+            # groups; the rebuild is the most expensive part of a scan, so a
+            # re-scan that finds no changes should cost nothing.
+            if _changed_anything(scan):
+                from app.services.duplicates import rebuild_duplicate_groups
 
-            rebuild_duplicate_groups(session)
+                rebuild_duplicate_groups(session)
+            else:
+                logger.info("scan %s changed nothing; keeping existing duplicate groups", scan_id)
             scans.mark_finished(scan, "completed")
             logger.info(
                 "scan %s completed: %s found, %s added, %s errors",
@@ -150,6 +156,15 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
             logger.exception("scan %s failed", scan_id)
             session.rollback()
             scans.mark_finished(scan, "failed", message=f"{type(exc).__name__}: {exc}")
+
+
+def _changed_anything(scan: Scan) -> bool:
+    """Did this scan alter the active photo set at all?
+
+    Derived duplicate groups are a pure function of the active photo rows, so
+    if none were added, changed, moved or lost, the groups cannot differ.
+    """
+    return bool(scan.files_added or scan.files_changed or scan.files_missing or scan.files_moved)
 
 
 def _roots_for(session: Session, scan: Scan) -> list[ScanRoot]:

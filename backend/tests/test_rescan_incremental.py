@@ -1,13 +1,15 @@
 import shutil
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Photo, Scan
+from app.services import duplicates
 from app.services.scans import recover_interrupted_scans
-from tests.images import make_image
+from tests.images import make_image, make_textured_image
 
 
 def _add_root(client: TestClient, path: Path) -> int:
@@ -105,6 +107,55 @@ def test_move_across_roots_is_detected(
     db_session.refresh(photo)
     assert photo.id == original_id
     assert photo.root_id == id_b
+
+
+def test_a_rescan_that_finds_no_changes_skips_the_duplicate_rebuild(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rebuild is the most expensive part of a scan and is a pure function
+    of the active photo rows — if nothing changed, it has nothing to do."""
+    make_image(tmp_path / "a.jpg", color="red")
+    _add_root(client, tmp_path)
+    _run_scan(client)
+
+    calls = 0
+    real = duplicates.rebuild_duplicate_groups
+
+    def counting(session: Session) -> object:
+        nonlocal calls
+        calls += 1
+        return real(session)
+
+    monkeypatch.setattr(duplicates, "rebuild_duplicate_groups", counting)
+
+    unchanged = _run_scan(client)
+    assert unchanged["status"] == "completed"
+    assert unchanged["files_unchanged"] == 1
+    assert calls == 0, "nothing changed, yet the groups were rebuilt"
+
+    make_image(tmp_path / "b.jpg", color="green")
+    changed = _run_scan(client)
+    assert changed["files_added"] == 1
+    assert calls == 1, "a scan that added a photo must refresh the groups"
+
+
+def test_skipping_the_rebuild_leaves_existing_duplicate_groups_intact(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """A no-op rescan must not disturb groups the user has already reviewed."""
+    original = make_textured_image(tmp_path / "original.jpg", seed=3)
+    (tmp_path / "copy.jpg").write_bytes(original.read_bytes())
+    _add_root(client, tmp_path)
+    _run_scan(client)
+    before = client.get("/api/duplicates/groups", params={"kind": "exact"}).json()
+    assert before["total"] == 1
+
+    _run_scan(client)
+
+    after = client.get("/api/duplicates/groups", params={"kind": "exact"}).json()
+    assert after["total"] == 1
+    assert after["items"][0]["id"] == before["items"][0]["id"]
+    assert len(after["items"][0]["members"]) == 2
 
 
 def test_interrupted_scans_are_failed_by_startup_recovery(db_session: Session) -> None:
