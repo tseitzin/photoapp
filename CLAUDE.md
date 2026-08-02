@@ -33,7 +33,11 @@ cd frontend
 - Preserve the design's visual language (tokens, spacing, radii, light/dark palettes
   from the handoff README). No CSS frameworks or component libraries.
 - Originals are read-only: the app never moves/modifies photos except via the
-  audited quarantine workflow in `backend/app/files/`.
+  audited quarantine and organize workflows in `backend/app/files/`.
+- **Never delete or prune the user's directories** — not even empty ones left
+  behind by an organize move, and never as unrequested "cleanup". The app only
+  creates directories and moves/deletes *files*, through the audited workflows.
+  Removing a directory takes an explicit request naming that directory.
 - Tests never touch a real photo library — temp dirs + generated images only.
 - **PostgreSQL, not SQLite** — deliberate stack-consistency choice; don't revisit.
 - Destructive file operations: quarantine-first, explicit confirmation, audit log,

@@ -69,6 +69,32 @@ def test_executing_a_run_moves_files_updates_paths_and_audits_with_one_batch_id(
     assert all(op.dest_path and op.size_bytes for op in ops)
 
 
+def test_organizing_leaves_the_source_folders_in_place(
+    client: TestClient,
+    db_session: Session,
+    db_session_factory: sessionmaker[Session],
+    tmp_path: Path,
+) -> None:
+    """Photos relocate; the user's folder structure is never pruned.
+
+    Organizing empties the source directories, but they stay on disk — the app
+    creates directories and moves files, and removes neither.
+    """
+    make_image(tmp_path / "inbox" / "a.jpg", exif_ifd_fields=CAPTURED)
+    make_image(tmp_path / "inbox" / "sub" / "b.jpg", color="tomato", exif_ifd_fields=CAPTURED)
+    _index(client, tmp_path)
+
+    run = _run(db_session, db_session_factory, tmp_path, [tmp_path / "inbox"])
+
+    assert run.status == "completed" and run.moved == 2
+    # Emptied, but still there.
+    assert (tmp_path / "inbox").is_dir()
+    assert (tmp_path / "inbox" / "sub").is_dir()
+    assert list((tmp_path / "inbox").rglob("*.jpg")) == []
+    assert (tmp_path / "Organized" / "2024" / "07" / "a.jpg").is_file()
+    assert (tmp_path / "Organized" / "2024" / "07" / "b.jpg").is_file()
+
+
 def test_cross_root_move_updates_root_id(
     client: TestClient,
     db_session: Session,
