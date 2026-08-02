@@ -2,9 +2,17 @@
 
 Candidate selection is LSH banding: hashes are split into 8 byte-bands and
 only hashes sharing at least one band are compared. That is complete for any
-Hamming threshold <= 7 (pigeonhole) and near-linear in practice. Identical
-hashes are collapsed first, so pathological clusters (burst shots, flat
-images) cost one representative each, not O(k^2).
+Hamming threshold <= 7 (pigeonhole). Identical hashes are collapsed first, so
+pathological clusters (burst shots, flat images) cost one representative each,
+not O(k^2).
+
+Cost: comparisons are quadratic *within a band bucket*, so with n well-spread
+hashes over 8 bands x 256 buckets the pass does on the order of n^2/64
+distance checks — ~0.5 s at n=4.5k, ~8 s at n=18k. That is inherent to making
+the pass complete, and is why memory has to stay linear: an earlier version
+memoized every compared pair, which reached 418 MB at n=18k and projected past
+3 GB at 50k. Union-find already makes repeated merges idempotent, so no such
+bookkeeping is needed.
 
 pHash finds resized/recompressed/re-encoded variants; it does NOT find crops
 or edits — that is the future embeddings path. Results are therefore always
@@ -53,20 +61,19 @@ def _connected_components(values: list[int], threshold: int) -> list[list[int]]:
         for band, band_value in enumerate(band_values(value)):
             buckets.setdefault((band, band_value), []).append(value)
 
-    checked: set[tuple[int, int]] = set()
     for bucket in buckets.values():
         if len(bucket) < 2:
             continue
         for i, first in enumerate(bucket):
             for second in bucket[i + 1 :]:
-                pair = (first, second) if first < second else (second, first)
-                if pair in checked:
+                # Already the same component: the merge would be a no-op, and
+                # this is cheaper than the distance check it skips. Hashes
+                # sharing several bands hit this often.
+                root_a, root_b = find(first), find(second)
+                if root_a == root_b:
                     continue
-                checked.add(pair)
                 if (first ^ second).bit_count() <= threshold:
-                    root_a, root_b = find(first), find(second)
-                    if root_a != root_b:
-                        parent[root_b] = root_a
+                    parent[root_b] = root_a
 
     components: dict[int, list[int]] = {}
     for value in values:
