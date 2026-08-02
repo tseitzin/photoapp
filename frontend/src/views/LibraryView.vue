@@ -106,7 +106,14 @@ const breadcrumb = computed(() => {
         />
       </div>
 
-      <div ref="gridScroll" class="grid-scroll">
+      <!-- The tile-size variable lives here, not on the grid: binding it inside
+           PhotoGrid made store.tileSize a dependency of the grid's render, so
+           dragging the slider re-rendered every tile on every mousemove. -->
+      <div
+        ref="gridScroll"
+        class="grid-scroll"
+        :style="{ '--tile-min': `${store.tileSize}px` }"
+      >
         <div v-if="store.loading" class="skeleton" aria-label="Loading photos">
           <div class="skeleton-header" />
           <div class="skeleton-grid">
