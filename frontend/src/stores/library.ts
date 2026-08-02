@@ -17,6 +17,15 @@ export const PAGE_SIZE_OPTIONS: PageSize[] = [100, 250, 500, 1000, 'all']
 // The backend caps a single response at 1000 rows; "all" pages through in
 // chunks of this size.
 const CHUNK_SIZE = 1000
+// A "Show: All" selection can run to thousands of ids; send them in batches
+// rather than one enormous request body.
+const MARK_CHUNK_SIZE = 500
+
+/** Modifier keys that were held during a grid click. */
+export interface ClickModifiers {
+  shift: boolean
+  toggle: boolean
+}
 
 export interface LibraryFilters {
   types: string[]
@@ -46,6 +55,11 @@ export const useLibraryStore = defineStore('library', () => {
   // is the separate "selected for organizing" state.
   const activeFolder = ref<string | null>(null)
   const selectedPhotoId = ref<number | null>(null)
+  // Multi-selection for bulk actions. selectedPhotoId stays the *focused*
+  // photo (details panel, lightbox); selectedIds is what the action bar acts on.
+  const selectedIds = ref(new Set<number>())
+  // Where a shift-range starts — the last photo picked without shift.
+  const anchorId = ref<number | null>(null)
   const lightboxOpen = ref(false)
   const lightboxIndex = ref(0)
 
@@ -106,6 +120,9 @@ export const useLibraryStore = defineStore('library', () => {
   async function fetchCurrentPage(): Promise<void> {
     loading.value = true
     error.value = null
+    // The page is about to be replaced: a bulk action must never reach photos
+    // the user can no longer see. Covers reload, paging and page-size changes.
+    clearSelection()
     try {
       if (pageSize.value === 'all') {
         const accumulated: PhotoRead[] = []
@@ -247,6 +264,51 @@ export const useLibraryStore = defineStore('library', () => {
     selectedPhotoId.value = id
   }
 
+  function selectOnly(id: number): void {
+    selectedIds.value = new Set([id])
+    anchorId.value = id
+  }
+
+  /**
+   * Grid click, modifiers included.
+   *
+   * Plain click selects one photo and becomes the anchor. Shift *adds* the run
+   * from the anchor to here — additive so a scattered ⌘-click selection is
+   * never wiped — and leaves the anchor put so the run can be re-dragged. ⌘/Ctrl
+   * toggles a single photo. A shift-click with no usable anchor (first click, or
+   * the anchor has since left the page) falls back to a plain click.
+   */
+  function clickPhoto(id: number, mods: ClickModifiers = { shift: false, toggle: false }): void {
+    selectedPhotoId.value = id
+    if (mods.toggle) {
+      const next = new Set(selectedIds.value)
+      if (!next.delete(id)) next.add(id)
+      selectedIds.value = next
+      anchorId.value = id
+      return
+    }
+    if (!mods.shift) {
+      selectOnly(id)
+      return
+    }
+    const from = photos.value.findIndex((p) => p.id === anchorId.value)
+    const to = photos.value.findIndex((p) => p.id === id)
+    if (from === -1 || to === -1) {
+      selectOnly(id)
+      return
+    }
+    const next = new Set(selectedIds.value)
+    for (const photo of photos.value.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+      next.add(photo.id)
+    }
+    selectedIds.value = next
+  }
+
+  function clearSelection(): void {
+    selectedIds.value = new Set()
+    anchorId.value = null
+  }
+
   const markedOnPage = computed(
     () => photos.value.filter((p) => p.marked_for_deletion).length,
   )
@@ -262,6 +324,23 @@ export const useLibraryStore = defineStore('library', () => {
     } catch (e) {
       photo.marked_for_deletion = !willMark // revert on failure
       error.value = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  /** Flag/unflag every selected photo, in batches, optimistically. */
+  async function setMarkedForSelection(marked: boolean): Promise<void> {
+    const targets = photos.value.filter((p) => selectedIds.value.has(p.id))
+    if (targets.length === 0) return
+    for (const photo of targets) photo.marked_for_deletion = marked // optimistic
+    for (let i = 0; i < targets.length; i += MARK_CHUNK_SIZE) {
+      const batch = targets.slice(i, i + MARK_CHUNK_SIZE)
+      try {
+        await (marked ? markPhotos : unmarkPhotos)(batch.map((p) => p.id))
+      } catch (e) {
+        // Only this batch failed; earlier batches really did apply.
+        for (const photo of batch) photo.marked_for_deletion = !marked
+        error.value = e instanceof Error ? e.message : String(e)
+      }
     }
   }
 
@@ -310,6 +389,7 @@ export const useLibraryStore = defineStore('library', () => {
     activeFolder,
     selectedPhotoId,
     selectedPhoto,
+    selectedIds,
     lightboxOpen,
     lightboxIndex,
     lightboxPhoto,
@@ -337,6 +417,9 @@ export const useLibraryStore = defineStore('library', () => {
     setSort,
     setGroupBy,
     selectPhoto,
+    clickPhoto,
+    clearSelection,
+    setMarkedForSelection,
     toggleMark,
     markedOnPage,
   }

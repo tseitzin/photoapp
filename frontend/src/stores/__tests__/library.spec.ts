@@ -234,6 +234,83 @@ describe('library store', () => {
     expect(store.error).toContain('offline')
   })
 
+  it('marking the selection sends every selected id to the API', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2, 3, 4], 4))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(3, { shift: true, toggle: false })
+
+    await store.setMarkedForSelection(true)
+
+    expect(markMock).toHaveBeenCalledWith([1, 2, 3])
+    expect(store.markedOnPage).toBe(3)
+    expect(store.photos.find((p) => p.id === 4)!.marked_for_deletion).toBe(false)
+  })
+
+  it('unmarking the selection clears the flag on every selected photo', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(2, { shift: true, toggle: false })
+    await store.setMarkedForSelection(true)
+
+    await store.setMarkedForSelection(false)
+
+    expect(unmarkMock).toHaveBeenCalledWith([1, 2])
+    expect(store.markedOnPage).toBe(0)
+  })
+
+  it('a failed bulk mark reverts the tiles and surfaces the error', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(2, { shift: true, toggle: false })
+    markMock.mockRejectedValueOnce(new Error('offline'))
+
+    await store.setMarkedForSelection(true)
+
+    expect(store.photos.every((p) => !p.marked_for_deletion)).toBe(true)
+    expect(store.error).toContain('offline')
+  })
+
+  it('marking with nothing selected touches neither the API nor the photos', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+
+    await store.setMarkedForSelection(true)
+
+    expect(markMock).not.toHaveBeenCalled()
+    expect(store.markedOnPage).toBe(0)
+  })
+
+  it('changing page clears the selection', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 250))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    expect(store.selectedIds.size).toBe(1)
+
+    await store.nextPage()
+
+    expect(store.selectedIds.size).toBe(0)
+  })
+
+  it('reloading after a filter change clears the selection', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(2, { shift: true, toggle: false })
+
+    await store.setFolder('/lib/Updated')
+
+    expect(store.selectedIds.size).toBe(0)
+  })
+
   it('counts checked folders without double-counting checked descendants', async () => {
     const store = useLibraryStore()
     store.folders = [
