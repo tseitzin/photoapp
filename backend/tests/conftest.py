@@ -3,7 +3,7 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
@@ -33,6 +33,10 @@ def db_engine() -> Iterator[Engine]:
             "aperture_test database unavailable — start it with `docker compose up -d` "
             f"(url: {TEST_DATABASE_URL})"
         )
+    # Production gets this from migration 0013; create_all needs it in place
+    # before it can build the trigram index on photos.filename.
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield engine
