@@ -85,6 +85,21 @@ export function getPhoto(id: number): Promise<PhotoDetail> {
   return request<PhotoDetail>(`/api/photos/${id}`)
 }
 
+export interface SimilarPhoto {
+  photo: PhotoRead
+  /** Hamming distance between the perceptual hashes; lower is closer. */
+  distance: number
+  similarity_pct: number
+}
+
+/**
+ * Visually similar photos — resized, recompressed or re-encoded variants.
+ * pHash does not find crops or edits.
+ */
+export function listSimilarPhotos(id: number, limit = 12): Promise<SimilarPhoto[]> {
+  return request<SimilarPhoto[]>(`/api/photos/${id}/similar?limit=${limit}`)
+}
+
 export function getFacets(): Promise<Facets> {
   return request<Facets>('/api/photos/facets')
 }

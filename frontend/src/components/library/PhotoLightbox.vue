@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getPhoto, previewUrl, thumbnailUrl, type PhotoDetail } from '@/api/photos'
+import {
+  getPhoto,
+  listSimilarPhotos,
+  previewUrl,
+  thumbnailUrl,
+  type PhotoDetail,
+  type SimilarPhoto,
+} from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
-import { formatBytes, formatCount, formatDate } from '@/utils/format'
+import { formatBytes, formatCoordinates, formatCount, formatDate, mapUrl } from '@/utils/format'
 
 const store = useLibraryStore()
 
@@ -88,6 +95,50 @@ const strip = computed(() => {
   }))
 })
 
+const location = computed(() => {
+  const photo = store.lightboxPhoto
+  if (!photo || photo.latitude == null || photo.longitude == null) return null
+  return {
+    text: formatCoordinates(photo.latitude, photo.longitude),
+    url: mapUrl(photo.latitude, photo.longitude),
+  }
+})
+
+// Visually similar photos, fetched on the same settle as the full preview so
+// skimming with the arrow keys doesn't fire a query per frame.
+const similar = ref<SimilarPhoto[]>([])
+const similarCache = new Map<number, SimilarPhoto[]>()
+let similarTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(
+  () => store.lightboxPhoto?.id,
+  (id) => {
+    similar.value = []
+    clearTimeout(similarTimer)
+    if (id == null) return
+    const cached = similarCache.get(id)
+    if (cached) {
+      similar.value = cached
+      return
+    }
+    similarTimer = setTimeout(async () => {
+      try {
+        const found = await listSimilarPhotos(id)
+        similarCache.set(id, found)
+        if (store.lightboxPhoto?.id === id) similar.value = found
+      } catch {
+        /* the strip is an extra; its absence is not worth an error */
+      }
+    }, PREVIEW_DEBOUNCE_MS)
+  },
+  { immediate: true },
+)
+
+/** The lightbox walks the loaded page, so only those can be jumped to. */
+function onPage(photoId: number): boolean {
+  return store.photos.some((p) => p.id === photoId)
+}
+
 const stripEl = ref<HTMLElement | null>(null)
 watch(
   () => store.lightboxIndex,
@@ -164,7 +215,39 @@ watch(
       <span v-if="store.lightboxPhoto.camera_model">{{ store.lightboxPhoto.camera_model }}</span>
       <span v-if="iso">{{ iso }}</span>
       <span>{{ formatDate(store.lightboxPhoto.captured_at) }}</span>
+      <!-- A link, never an embedded map: rendering tiles would send the
+           location of the user's photos to a third party. -->
+      <a
+        v-if="location"
+        class="meta-map"
+        :href="location.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        :title="`Open ${location.text} in OpenStreetMap`"
+      >
+        📍 {{ location.text }}
+      </a>
     </p>
+
+    <div v-if="similar.length" class="similar">
+      <span class="similar-label">More like this</span>
+      <button
+        v-for="match in similar"
+        :key="match.photo.id"
+        type="button"
+        class="similar-thumb"
+        :disabled="!onPage(match.photo.id)"
+        :title="
+          onPage(match.photo.id)
+            ? `${match.photo.filename} — ${match.similarity_pct}% similar`
+            : `${match.photo.filename} — ${match.similarity_pct}% similar (on another page)`
+        "
+        @click="store.openLightbox(match.photo.id)"
+      >
+        <img :src="thumbnailUrl(match.photo.id)" :alt="match.photo.filename" loading="lazy" />
+        <span class="similar-pct">{{ match.similarity_pct }}%</span>
+      </button>
+    </div>
 
     <div ref="stripEl" class="strip">
       <button
@@ -308,6 +391,75 @@ watch(
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: #8a8a92;
+}
+
+.meta-map {
+  color: #9db6e0;
+  text-decoration: none;
+}
+
+.meta-map:hover {
+  text-decoration: underline;
+}
+
+.similar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 0 16px;
+  overflow-x: auto;
+}
+
+.similar-label {
+  flex: none;
+  margin-right: 4px;
+  font-size: 11.5px;
+  color: #8a8a92;
+}
+
+.similar-thumb {
+  position: relative;
+  flex: none;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1c1c1f;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.similar-thumb:hover:not(:disabled) {
+  opacity: 1;
+}
+
+/* Not on the loaded page, so the lightbox cannot walk to it. */
+.similar-thumb:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.similar-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.similar-pct {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(9, 9, 11, 0.72);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 13px;
+  color: #e7e7ea;
 }
 
 .strip {
