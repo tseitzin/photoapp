@@ -106,6 +106,22 @@ const breadcrumb = computed(() => {
         />
       </div>
 
+      <!-- The full-pane error state below only renders when the grid is empty,
+           so a failure during an action on a loaded grid — a bulk mark, a
+           single mark toggle — had nowhere to appear and went silent. -->
+      <div v-if="store.error && store.photos.length > 0" class="error-strip" role="alert">
+        <span class="error-text">{{ store.error }}</span>
+        <button type="button" class="error-retry" @click="store.reload()">Reload</button>
+        <button
+          type="button"
+          class="error-dismiss"
+          aria-label="Dismiss error"
+          @click="store.dismissError()"
+        >
+          ✕
+        </button>
+      </div>
+
       <!-- The tile-size variable lives here, not on the grid: binding it inside
            PhotoGrid made store.tileSize a dependency of the grid's render, so
            dragging the slider re-rendered every tile on every mousemove. -->
@@ -276,6 +292,39 @@ const breadcrumb = computed(() => {
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.error-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  background: color-mix(in oklab, var(--danger) 12%, var(--bar));
+  border-bottom: 1px solid var(--border);
+}
+
+.error-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.error-retry,
+.error-dismiss {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.error-dismiss {
+  padding: 4px 8px;
 }
 
 .pagination {
