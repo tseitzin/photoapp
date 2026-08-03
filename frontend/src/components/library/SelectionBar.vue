@@ -6,7 +6,14 @@ import { formatCount } from '@/utils/format'
 const store = useLibraryStore()
 
 const count = computed(() => store.selectedIds.size)
-const busy = computed(() => store.loading)
+const busy = computed(() => store.bulkBusy)
+// Only worth showing when the run spans several requests; a single batch is
+// over before the label would be read.
+const progressLabel = computed(() =>
+  store.bulkBusy && store.bulkProgress > 0 && count.value > store.bulkProgress
+    ? `${formatCount(store.bulkProgress)} of ${formatCount(count.value)}…`
+    : null,
+)
 
 // Escape is the conventional "never mind" for a selection. The lightbox owns
 // the key while it is open, so stand down then.
@@ -21,15 +28,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 <template>
   <div v-if="count > 0" class="selection-bar" role="toolbar" aria-label="Selected photos">
     <span class="count">{{ formatCount(count) }} selected</span>
-    <span class="hint">Shift+click for a range · ⌘/Ctrl+click for one</span>
+    <span v-if="progressLabel" class="progress" role="status">{{ progressLabel }}</span>
+    <span v-else class="hint">Shift+click for a range · ⌘/Ctrl+click for one</span>
     <span class="spacer" />
-    <button type="button" class="btn btn--danger" :disabled="busy" @click="store.setMarkedForSelection(true)">
+    <button
+      type="button"
+      class="btn btn--danger"
+      :disabled="busy"
+      @click="store.setMarkedForSelection(true)"
+    >
       🗑 Mark for deletion
     </button>
     <button type="button" class="btn" :disabled="busy" @click="store.setMarkedForSelection(false)">
       ↺ Unmark
     </button>
-    <button type="button" class="btn clear" @click="store.clearSelection()">✕ Clear</button>
+    <button type="button" class="btn clear" :disabled="busy" @click="store.clearSelection()">
+      ✕ Clear
+    </button>
   </div>
 </template>
 
@@ -54,6 +69,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .hint {
   font-size: 11.5px;
   color: var(--muted);
+}
+
+.progress {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--sub);
 }
 
 .spacer {

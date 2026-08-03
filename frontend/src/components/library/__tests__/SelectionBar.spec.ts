@@ -115,6 +115,28 @@ describe('SelectionBar', () => {
     expect(store.selectedIds.size).toBe(0)
   })
 
+  it('disables its buttons while a bulk mark is in flight', async () => {
+    const store = withSelection()
+    let release = (): void => {}
+    markMock.mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ marked: true, affected: 2 }))),
+    )
+    const wrapper = mount(SelectionBar)
+
+    const run = store.setMarkedForSelection(true)
+    await wrapper.vm.$nextTick()
+    expect(
+      wrapper.findAll('.btn').every((b) => (b.element as HTMLButtonElement).disabled),
+    ).toBe(true)
+
+    release()
+    await run
+    await wrapper.vm.$nextTick()
+    expect(
+      wrapper.findAll('.btn').some((b) => (b.element as HTMLButtonElement).disabled),
+    ).toBe(false)
+  })
+
   it('escape leaves the selection alone while the lightbox is open', async () => {
     const store = withSelection()
     store.openLightbox(1)

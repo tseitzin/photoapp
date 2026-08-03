@@ -38,6 +38,16 @@ export const useLibraryStore = defineStore('library', () => {
   const total = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  // A bulk mark/unmark is several sequential requests; the buttons must not
+  // stay live while it runs.
+  const bulkBusy = ref(false)
+  const bulkProgress = ref(0) // photos written so far in the current bulk action
+  // Has the Library been opened this session? Other stores use it to decide
+  // whether their changes leave anything stale to refresh. Content is the wrong
+  // signal: a page can legitimately be empty.
+  const hasLoaded = ref(false)
+
+  let fetchSeq = 0
 
   const pageSize = ref<PageSize>(100)
   const page = ref(0) // 0-indexed
@@ -118,6 +128,10 @@ export const useLibraryStore = defineStore('library', () => {
   }
 
   async function fetchCurrentPage(): Promise<void> {
+    // Typing in the search box fires a request per debounce window, and a slow
+    // earlier one must not land on top of a newer one. Same guard the organize
+    // store uses for its preview.
+    const seq = ++fetchSeq
     loading.value = true
     error.value = null
     // The page is about to be replaced: a bulk action must never reach photos
@@ -130,6 +144,7 @@ export const useLibraryStore = defineStore('library', () => {
         let count = 0
         do {
           const chunk = await fetchChunk(CHUNK_SIZE, offset)
+          if (seq !== fetchSeq) return // superseded mid-chunking
           count = chunk.total
           accumulated.push(...chunk.items)
           offset += CHUNK_SIZE
@@ -138,15 +153,20 @@ export const useLibraryStore = defineStore('library', () => {
         total.value = count
       } else {
         const result = await fetchChunk(pageSize.value, page.value * pageSize.value)
+        if (seq !== fetchSeq) return
         photos.value = result.items
         total.value = result.total
       }
     } catch (e) {
+      if (seq !== fetchSeq) return
       error.value = e instanceof Error ? e.message : String(e)
       photos.value = []
       total.value = 0
     } finally {
-      loading.value = false
+      if (seq === fetchSeq) {
+        loading.value = false
+        hasLoaded.value = true
+      }
     }
   }
 
@@ -329,19 +349,42 @@ export const useLibraryStore = defineStore('library', () => {
 
   /** Flag/unflag every selected photo, in batches, optimistically. */
   async function setMarkedForSelection(marked: boolean): Promise<void> {
+    if (bulkBusy.value) return // a second click must not re-fire the whole run
     const targets = photos.value.filter((p) => selectedIds.value.has(p.id))
     if (targets.length === 0) return
-    for (const photo of targets) photo.marked_for_deletion = marked // optimistic
-    for (let i = 0; i < targets.length; i += MARK_CHUNK_SIZE) {
-      const batch = targets.slice(i, i + MARK_CHUNK_SIZE)
-      try {
-        await (marked ? markPhotos : unmarkPhotos)(batch.map((p) => p.id))
-      } catch (e) {
-        // Only this batch failed; earlier batches really did apply.
-        for (const photo of batch) photo.marked_for_deletion = !marked
-        error.value = e instanceof Error ? e.message : String(e)
+    bulkBusy.value = true
+    bulkProgress.value = 0
+    error.value = null
+    let failed = 0
+    try {
+      for (const photo of targets) photo.marked_for_deletion = marked // optimistic
+      for (let i = 0; i < targets.length; i += MARK_CHUNK_SIZE) {
+        const batch = targets.slice(i, i + MARK_CHUNK_SIZE)
+        try {
+          await (marked ? markPhotos : unmarkPhotos)(batch.map((p) => p.id))
+        } catch (e) {
+          // Only this batch failed; earlier batches really did apply.
+          for (const photo of batch) photo.marked_for_deletion = !marked
+          failed += batch.length
+          error.value = e instanceof Error ? e.message : String(e)
+        }
+        bulkProgress.value = Math.min(i + MARK_CHUNK_SIZE, targets.length)
       }
+      if (failed && failed < targets.length) {
+        // Partial success is the confusing case: say plainly what landed.
+        const verb = marked ? 'Marked' : 'Unmarked'
+        error.value =
+          `${verb} ${targets.length - failed} of ${targets.length} photos — ` +
+          `${failed} failed: ${error.value}`
+      }
+    } finally {
+      bulkBusy.value = false
+      bulkProgress.value = 0
     }
+  }
+
+  function dismissError(): void {
+    error.value = null
   }
 
   const lightboxPhoto = computed(() => photos.value[lightboxIndex.value] ?? null)
@@ -371,6 +414,10 @@ export const useLibraryStore = defineStore('library', () => {
     total,
     loading,
     error,
+    bulkBusy,
+    bulkProgress,
+    hasLoaded,
+    dismissError,
     pageSize,
     page,
     totalPages,
@@ -401,6 +448,7 @@ export const useLibraryStore = defineStore('library', () => {
     init,
     reload,
     loadFolders,
+    loadFacets,
     goToPage,
     nextPage,
     prevPage,
