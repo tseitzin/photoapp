@@ -12,8 +12,8 @@ live progress, full library browsing (grid, folders, filters, search, lightbox),
 exact SHA-256 duplicate detection + near-duplicates via perceptual hash (LSH-banded)
 with pair-by-pair review, safe quarantine-first file management with audit log,
 physical organize (move folders to a new structure by date/camera/keep, with optional
-rename), and GPS coordinate extraction (UI planned). See [TASKS.md](TASKS.md) for
-roadmap.
+rename), and GPS coordinates surfaced in the details panel and lightbox.
+See [TASKS.md](TASKS.md) for roadmap.
 
 The visual design lives in [`design_handoff_photo_organizer/`](design_handoff_photo_organizer/)
 (HTML prototypes + design spec) and is **read-only** — the source of truth for look and
@@ -30,6 +30,13 @@ behavior. Vue 3 components recreate the design; the handoff files must never be 
   run between the two, **⌘/Ctrl+click** to add or remove one. A selection bar shows
   the count and can mark or unmark the whole set for deletion in one call. Selection
   is scoped to the loaded page and clears whenever the grid refetches.
+- **See where a photo was taken**: Coordinates from the EXIF GPS tags appear in the
+  details panel and the lightbox, with a link out to a map. The link is deliberately
+  not an embedded map — nothing leaves the machine unless you click it. Photos indexed
+  before GPS extraction existed can gain coordinates via **Find locations** on the Scan
+  screen, which re-reads only their EXIF headers.
+- **Find near-duplicates of one photo**: The lightbox shows a "More like this" strip of
+  visually similar photos with their similarity percentage.
 - **Find duplicates**: Exact duplicates (SHA-256) and visually similar photos (perceptual
   hash + LSH). Side-by-side compare and record keep/remove decisions.
 - **Organize**: Physically move selected folders' photos into a destination with
@@ -126,8 +133,8 @@ For complete architectural details, data model, design decisions, and tradeoffs,
 │   │   ├── db/                      # SQLAlchemy session, connection pool
 │   │   ├── core/                    # Config (pydantic-settings), structured logging
 │   │   └── main.py                  # FastAPI app initialization
-│   ├── alembic/                     # Database migrations (0001–0012)
-│   ├── tests/                       # pytest (166 tests)
+│   ├── alembic/                     # Database migrations (0001–0013)
+│   ├── tests/                       # pytest (176 tests)
 │   ├── .env.example                 # Configuration template
 │   ├── requirements.txt             # Dependencies
 │   └── requirements-dev.txt         # Test/lint deps (pytest, ruff, mypy)
@@ -238,7 +245,7 @@ ruff format --check .
 mypy app
 ```
 
-All 166 backend tests use temporary directories and generated images only —
+All 176 backend tests use temporary directories and generated images only —
 they never touch a real photo library.
 
 ### Frontend
@@ -253,7 +260,7 @@ npm run test
 npm run lint && npm run type-check
 ```
 
-All 111 frontend tests run in vitest (isolated, mocked API calls).
+All 153 frontend tests run in vitest (isolated, mocked API calls).
 
 ### Both
 
@@ -482,10 +489,10 @@ See [CLAUDE.md](CLAUDE.md) for why these are reserved:
 - **HEIC/HEIF support** depends on `pillow-heif` (included in requirements.txt).
 - **Perceptual hash similarity** finds resized/recompressed variants, not crops or
   edits. Image embeddings (CLIP family via pgvector) are the upgrade path.
-- **No location UI yet** — GPS coordinates are extracted during scan and stored
-  (`photos.latitude`, `photos.longitude`); photos indexed before this feature can be
-  backfilled via `POST /api/maintenance/backfill-gps`. The map/grouping UI and
-  offline reverse geocoding are future work.
+- **Locations are coordinates, not place names** — a photo's coordinates appear in the
+  details panel and lightbox with a link out to a map, but there is no reverse
+  geocoding ("Boston, MA"), no map view, and no group-by-location. Offline reverse
+  geocoding is future work.
 - **No tags** — the design includes a Tags card on the Organize view; deferred.
 - **Single user, local only, no authentication** — do not expose the backend beyond
   localhost.
@@ -497,7 +504,7 @@ See [CLAUDE.md](CLAUDE.md) for why these are reserved:
 - Image embeddings (CLIP-family) in `photo_embeddings` table + pgvector ANN for
   semantic similarity and "find edited versions".
 - RAW support (metadata-only indexing or `rawpy`-based decode).
-- Location UI: reverse geocoding, map view, group by location.
+- Location: offline reverse geocoding, a map view, group by location.
 - Tags (from the design).
 - Dedicated worker process / real queue (Celery/RQ) if in-process jobs become
   limiting.
@@ -508,9 +515,9 @@ See [TASKS.md](TASKS.md) for detailed per-phase tracking.
 
 | Area | Stack |
 |---|---|
-| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (111 tests) |
+| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (153 tests) |
 | **Styling** | Hand-rolled CSS on design tokens (CSS custom properties); no CSS framework |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (166 tests) |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (176 tests) |
 | **Database** | PostgreSQL 16 (pgvector extension pre-installed for future embeddings) |
 | **Imaging** | Pillow, pillow-heif (HEIC/HEIF), ImageHash (perceptual hash) |
 | **Scanning** | ProcessPoolExecutor for CPU-bound decode/hash work; single-worker thread job runner (DB-persisted state) for coordination |

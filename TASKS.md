@@ -103,7 +103,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
       mark → refuse wipe → quarantine → restore → delete → audit.
 - [x] **PR 6.3** — merged into 6.1 (backend) and 6.2 (UI); see above.
 
-## Phase 7 — Organize
+## Phase 7 — Organize ✅ (2026-07-12)
 
 - [x] **PR 7.1** — Organize flow (move/rename + destination picker). Physical
       moves through the audited `files/` layer: modes keep-structure / by-date
@@ -120,9 +120,54 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
       `POST /api/maintenance/backfill-gps` cursor-sweeps photos indexed before
       the change. No location UI yet.
 
+## Phase 8 — Library usability ✅ (2026-08-02)
+
+- [x] Destination picker accepts typed absolute paths and nested subpaths; folder
+      names with colons or edge whitespace rejected; outside destinations
+      auto-registered as scan roots; destination and mode remembered across
+      sessions. Clicking a folder name filters the grid (the checkbox stays the
+      separate "selected for organizing" gesture).
+- [x] Grid multi-selection: click selects, **Shift+click** adds the run from the
+      anchor (additive, so a scattered ⌘-click set survives), **⌘/Ctrl+click**
+      toggles one. Selection bar marks/unmarks the whole set in 500-id batches.
+      Page-scoped — cleared on every refetch so a bulk action cannot reach photos
+      that are no longer visible.
+- [x] Source folders are never pruned after an organize move — codified in
+      `CLAUDE.md` and pinned by a regression test.
+
+## Phase 9 — Scale, rendering and safety ✅ (2026-08-02)
+
+- [x] **Query indexes** (migration 0013) — composites matching the real
+      filter+sort pairs, `text_pattern_ops` for the folder prefix, `pg_trgm` GIN
+      for filename search. Default page 11.7ms → 0.09ms; deep page 19.6ms with a
+      disk-spilled sort → 2.1ms with none. Declared on the model too, with a test
+      that model and migration agree.
+- [x] **`exif` deferred on list queries** — ~1.3 KB inline per row that no list
+      schema exposes.
+- [x] **Near-duplicate grouping made memory-linear** — dropped the pair memo
+      (418 MB at n=18k, projecting past 3 GB at 50k) for a union-find check:
+      4.4 MB and 2.4× faster, results verified identical against a brute-force
+      all-pairs reference.
+- [x] **Duplicate rebuild skipped when a scan changed nothing.**
+- [x] **`PhotoTile` extracted** so selection re-renders one tile instead of
+      re-diffing ~23,000 vnodes; tile-size slider taken off the grid's render
+      path; scan/organize polling stopped on navigation.
+- [x] **Bulk-action safety** — real busy state, visible errors on a loaded grid
+      (previously silent), Library refreshed after quarantine/restore/delete
+      (facets had no refresh path at all), stale page responses ignored.
+- [x] **Location UI** — coordinates + map link in the details panel and lightbox;
+      "Find locations" on the Scan screen runs the GPS backfill.
+- [x] **"More like this"** strip in the lightbox, and a **scan-errors drill-down**
+      — both endpoints existed and had no caller.
+
 ## Deferred / future
 
 - [ ] Tags (non-destructive subset of Organize; card exists in the design)
-- [ ] Group-by-location UI (needs offline reverse geocoding; coordinates now indexed)
+- [ ] Group-by-location UI and offline reverse geocoding (coordinates and a
+      per-photo location row now exist; place names and a map view do not)
 - [ ] pgvector embeddings for semantic similarity
 - [ ] RAW support (rawpy), SSE progress
+- [ ] Grid virtualization (the handoff asks for it; the Phase 9 render fixes
+      removed the measured jank without it)
+- [ ] Incremental similar-grouping (compare only new hashes against existing
+      bands) if the per-scan cost bites before embeddings land

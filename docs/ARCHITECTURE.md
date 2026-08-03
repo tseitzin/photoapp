@@ -43,7 +43,7 @@ file workflows in `files/` (quarantine and organize).
 
 ## Frontend structure
 
-- `views/` — Home, Library, Duplicates, Organize, Scan, Cleanup; routed via Vue Router.
+- `views/` — Home, Library, Duplicates, Organize, Scan, Quarantine; routed via Vue Router.
 - `components/` — recreated from the design prototypes (top bar, folder tree, photo
   grid, lightbox, compare panes, dial, toggles, segmented controls, modals).
 - `stores/` — Pinia: `theme` (persisted to `localStorage['aperture-theme']`),
@@ -69,7 +69,7 @@ scans ──────┘      ├──▶ file_operations (audit)
   `root_id, filename, ext, mime, size_bytes, mtime, width, height, captured_at,
   camera_make, camera_model, latitude, longitude, exif JSONB, sha256 (indexed), phash BIGINT,
   phash_b0..phash_b7 SMALLINT (each indexed), status (active|missing|quarantined),
-  marked_for_deletion (indexed), thumb_status, last_error, created_at, updated_at`.
+  marked_for_deletion (partial index), last_error, created_at, updated_at`.
   Change detection: `(size_bytes, mtime)` differs → reprocess. Same `sha256` seen at a
   new path with the old path missing → move, not delete+add.
   `marked_for_deletion` is a soft flag set from the Library (no file movement); the
@@ -102,6 +102,37 @@ scans ──────┘      ├──▶ file_operations (audit)
   (e.g. currently quarantined), so restore is unaffected.
 
 Originals are never stored in Postgres — paths and metadata only.
+
+### Indexing strategy (migration 0013)
+
+The Library's list query filters on `status` plus any of folder / extension /
+camera / filename, and sorts by capture date, filename or size. Each index
+therefore **leads with `status`** (every list query constrains it) and **ends with
+`id`** (the tiebreaker every sort already applies), so Postgres can walk the index
+in output order instead of sorting:
+
+| Index | Serves |
+|---|---|
+| `(status, captured_at DESC NULLS LAST, id DESC)` | the default sort |
+| `(status, captured_at ASC NULLS LAST, id ASC)` | ascending — a backward scan of the above yields NULLS FIRST, so it cannot serve this |
+| `(status, filename, id)` | name ascending, and descending backwards |
+| `(status, size_bytes, id)` | size, both directions |
+| `path text_pattern_ops` | the folder filter's `LIKE 'dir/%'`; the unique index on `path` uses the database collation and cannot serve a prefix match |
+| GIN `pg_trgm` on `filename` | filename search's leading-wildcard `ILIKE` |
+
+`status` has no index of its own — essentially every row is `active`, so alone it
+has no selectivity. `marked_for_deletion` is partial (`WHERE marked_for_deletion`)
+for the same reason inverted: only a handful of rows qualify.
+
+Two rules that keep this honest:
+
+- **Indexes are declared on the model *and* in the migration.** Tests build the
+  schema with `create_all` and production with Alembic, so the two can drift
+  silently — and a missing index costs nothing at 4k photos and everything at 50k.
+  `tests/test_photo_indexes.py` asserts they agree.
+- **List queries defer `photos.exif`.** It averages ~1.3 KB and lives inline in the
+  heap, so it dominates the bytes a page read touches, and no list schema exposes
+  it. Only `PhotoDetail`, via `get()`, loads it.
 
 ## Scan pipeline
 
@@ -161,6 +192,27 @@ Alternatives considered:
 
 Similar groups are always labeled "visually similar", never "duplicate" — only
 sha256-equal files are called exact duplicates.
+
+### Cost, and the two rules that bound it
+
+Banding makes the pass *complete* for threshold ≤ 7, but comparisons are still
+quadratic **within a band bucket**: with n well-spread hashes over 8 bands × 256
+buckets it does on the order of n²/64 distance checks. Measured: 0.25 s at
+n=4.5k, 3.3 s at n=18k.
+
+- **Memory must stay linear.** An earlier version memoized every compared pair,
+  which peaked at 418 MB by n=18,000 and projected past 3 GB at 50k — enough to
+  kill the process. Union-find already makes repeated merges idempotent, so the
+  memo was unnecessary; a `find()`-equality check replaces it, is cheaper than the
+  lookup it removes, and keeps peak memory in single-digit MB.
+- **The rebuild is skipped when a scan changed nothing.** Derived groups are a
+  pure function of the active photo rows, so a rescan that added, changed, moved
+  and lost nothing cannot change them. Without the guard, the most expensive part
+  of a scan ran on every no-op rescan.
+
+If per-scan cost becomes a problem before embeddings arrive, the next lever is
+incremental similar-grouping — comparing only new hashes against existing bands,
+the way `dedupe/incremental.py` already does for quarantine and restore.
 
 ## Background work
 
