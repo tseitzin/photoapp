@@ -3,9 +3,11 @@ import { defineStore } from 'pinia'
 import {
   cancelScan,
   getScan,
+  listScanErrors,
   listScans,
   startScan,
   TERMINAL_SCAN_STATUSES,
+  type ScanError,
   type ScanRead,
 } from '@/api/scans'
 import {
@@ -25,6 +27,10 @@ export const useScanStore = defineStore('scan', () => {
   const selectedRootIds = ref(new Set<number>())
   const activeScan = ref<ScanRead | null>(null)
   const error = ref<string | null>(null)
+  const scanErrors = ref<ScanError[]>([])
+  const scanErrorsTotal = ref(0)
+  const errorsLoading = ref(false)
+  const errorsOpen = ref(false)
 
   let pollTimer: ReturnType<typeof setInterval> | undefined
 
@@ -137,11 +143,40 @@ export const useScanStore = defineStore('scan', () => {
     }
   }
 
+  /**
+   * Fetch the files this scan could not read.
+   *
+   * The summary has always shown an error *count* with no way to see which
+   * files they were, which is a dead end when a photo silently fails to index.
+   */
+  async function loadErrors(): Promise<void> {
+    const scan = activeScan.value
+    if (!scan || errorsLoading.value) return
+    errorsLoading.value = true
+    try {
+      const page = await listScanErrors(scan.id)
+      scanErrors.value = page.items
+      scanErrorsTotal.value = page.total
+      errorsOpen.value = true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      errorsLoading.value = false
+    }
+  }
+
+  function hideErrors(): void {
+    errorsOpen.value = false
+  }
+
   function reset(): void {
     stopPolling()
     phase.value = 'setup'
     activeScan.value = null
     error.value = null
+    scanErrors.value = []
+    scanErrorsTotal.value = 0
+    errorsOpen.value = false
   }
 
   return {
@@ -150,6 +185,10 @@ export const useScanStore = defineStore('scan', () => {
     selectedRootIds,
     activeScan,
     error,
+    scanErrors,
+    scanErrorsTotal,
+    errorsLoading,
+    errorsOpen,
     progressPct,
     load,
     toggleRoot,
@@ -157,6 +196,8 @@ export const useScanStore = defineStore('scan', () => {
     removeRoot,
     start,
     cancel,
+    loadErrors,
+    hideErrors,
     reset,
     stopPolling,
   }

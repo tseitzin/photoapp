@@ -21,6 +21,20 @@ export interface ScanRead {
   created_at: string
 }
 
+export interface ScanError {
+  id: number
+  path: string
+  error: string
+  created_at: string
+}
+
+export interface ScanErrorPage {
+  items: ScanError[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export const TERMINAL_SCAN_STATUSES: ScanStatus[] = ['completed', 'failed', 'cancelled']
 
 export function startScan(rootIds: number[] | null): Promise<ScanRead> {
@@ -37,4 +51,9 @@ export function listScans(limit = 1): Promise<ScanRead[]> {
 
 export function cancelScan(id: number): Promise<ScanRead> {
   return requestJson<ScanRead>(`/api/scans/${id}/cancel`, 'POST', {})
+}
+
+/** Files the scan could not read — unreadable, corrupt, or permission-denied. */
+export function listScanErrors(scanId: number, limit = 100): Promise<ScanErrorPage> {
+  return request<ScanErrorPage>(`/api/scans/${scanId}/errors?limit=${limit}`)
 }

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useScanStore } from '@/stores/scan'
+import { useMaintenanceStore } from '@/stores/maintenance'
 import { formatCount } from '@/utils/format'
 
 const store = useScanStore()
+const maintenance = useMaintenanceStore()
 const newRootPath = ref('')
 const addingRoot = ref(false)
 
@@ -86,6 +88,34 @@ async function submitRoot(): Promise<void> {
           subfolders included
         </span>
       </div>
+
+      <section class="card">
+        <p class="card-label">LOCATIONS</p>
+        <p class="card-help">
+          Photos indexed before Aperture read GPS tags have no location saved, and a rescan
+          skips unchanged files — so they never pick one up. This reads just the EXIF header
+          of those photos. Nothing on disk is touched.
+        </p>
+        <p v-if="maintenance.error" class="error" role="alert">{{ maintenance.error }}</p>
+        <div class="start-row">
+          <button
+            type="button"
+            class="btn"
+            :disabled="maintenance.running"
+            @click="maintenance.run()"
+          >
+            {{ maintenance.running ? 'Finding locations…' : 'Find locations' }}
+          </button>
+          <button v-if="maintenance.running" type="button" class="btn" @click="maintenance.cancel()">
+            Stop
+          </button>
+          <span v-if="maintenance.running" class="muted" role="status">
+            checked {{ formatCount(maintenance.processed) }} ·
+            found {{ formatCount(maintenance.updated) }}
+          </span>
+          <span v-else-if="maintenance.summary" class="muted">{{ maintenance.summary }}</span>
+        </div>
+      </section>
     </template>
 
     <!-- Phase: scanning -->
@@ -137,6 +167,39 @@ async function submitRoot(): Promise<void> {
         {{ formatCount(store.activeScan?.files_missing ?? 0) }} missing,
         {{ formatCount(store.activeScan?.error_count ?? 0) }} errors.
       </p>
+
+      <!-- The count alone was a dead end: no way to find out which files
+           failed, or why. -->
+      <div v-if="(store.activeScan?.error_count ?? 0) > 0" class="errors-block">
+        <button
+          v-if="!store.errorsOpen"
+          type="button"
+          class="errors-toggle"
+          :disabled="store.errorsLoading"
+          @click="store.loadErrors()"
+        >
+          {{ store.errorsLoading ? 'Loading…' : 'Show the files that failed' }}
+        </button>
+        <template v-else>
+          <div class="errors-head">
+            <span class="errors-count">
+              {{ formatCount(store.scanErrorsTotal) }}
+              {{ store.scanErrorsTotal === 1 ? 'file' : 'files' }} could not be read
+            </span>
+            <button type="button" class="errors-toggle" @click="store.hideErrors()">Hide</button>
+          </div>
+          <ul class="errors-list">
+            <li v-for="failure in store.scanErrors" :key="failure.id" class="errors-row">
+              <span class="errors-path" :title="failure.path">{{ failure.path }}</span>
+              <span class="errors-why">{{ failure.error }}</span>
+            </li>
+          </ul>
+          <p v-if="store.scanErrorsTotal > store.scanErrors.length" class="muted">
+            Showing the first {{ formatCount(store.scanErrors.length) }}.
+          </p>
+        </template>
+      </div>
+
       <div class="done-actions">
         <RouterLink to="/library" class="btn btn--primary btn--lg">Open library →</RouterLink>
         <RouterLink to="/duplicates" class="btn btn--lg">Review duplicates</RouterLink>
@@ -197,6 +260,80 @@ async function submitRoot(): Promise<void> {
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--muted);
+}
+
+.errors-block {
+  width: 100%;
+  margin: 0 0 22px;
+  text-align: left;
+}
+
+.errors-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.errors-count {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.errors-toggle {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--chip);
+  color: var(--fg);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.errors-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.errors-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.errors-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.errors-row:last-child {
+  border-bottom: 0;
+}
+
+.errors-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.errors-why {
+  font-size: 11.5px;
+  color: var(--danger);
+}
+
+.card-help {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--sub);
 }
 
 .source-row {

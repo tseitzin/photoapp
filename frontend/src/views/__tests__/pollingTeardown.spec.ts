@@ -13,7 +13,11 @@ vi.mock('@/api/scans', () => ({
   getScan: vi.fn<() => Promise<ScanRead>>(),
   listScans: vi.fn<() => Promise<ScanRead[]>>(),
   cancelScan: vi.fn<() => Promise<ScanRead>>(),
+  listScanErrors: vi.fn<() => Promise<unknown>>(),
   TERMINAL_SCAN_STATUSES: ['completed', 'failed', 'cancelled'],
+}))
+vi.mock('@/api/maintenance', () => ({
+  backfillGps: vi.fn<() => Promise<unknown>>(),
 }))
 vi.mock('@/api/scanRoots', () => ({
   listScanRoots: vi.fn<() => Promise<never[]>>().mockResolvedValue([]),
