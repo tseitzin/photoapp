@@ -160,11 +160,24 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions.
 - [x] **"More like this"** strip in the lightbox, and a **scan-errors drill-down**
       — both endpoints existed and had no caller.
 
+## Phase 10 — Place names ✅ (2026-08-02)
+
+- [x] Offline reverse geocoding (`app/geo/places.py`): a k-d tree over ~150k
+      bundled GeoNames cities via `reverse_geocoder`. No web geocoding service —
+      photo coordinates never leave the machine. Nearest-place semantics are
+      explicit: `distance_km` is part of the result, the UI reads "near X" past
+      5 km, and beyond `PLACE_MAX_KM` no place is recorded.
+- [x] `photos.city/region/country/place_distance_km` (migration 0014), filled
+      during scans (in the parent process — the tree is ~100 MB and must not be
+      built per worker) and by the GPS backfill, batched one call per chunk.
+- [x] Place shown in the Library details panel and the lightbox, above the
+      coordinates and the map link.
+
 ## Deferred / future
 
 - [ ] Tags (non-destructive subset of Organize; card exists in the design)
-- [ ] Group-by-location UI and offline reverse geocoding (coordinates and a
-      per-photo location row now exist; place names and a map view do not)
+- [ ] Group-by-location UI and a map view (coordinates and place names now
+      exist; grouping, filtering and a map do not)
 - [ ] pgvector embeddings for semantic similarity
 - [ ] RAW support (rawpy), SSE progress
 - [ ] Grid virtualization (the handoff asks for it; the Phase 9 render fixes

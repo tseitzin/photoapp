@@ -67,7 +67,8 @@ scans ──────┘      ├──▶ file_operations (audit)
 - **scan_roots** — configured library directories. `id, path (unique), enabled, created_at`.
 - **photos** — one row per discovered file. Identity: `path` (unique). Fields:
   `root_id, filename, ext, mime, size_bytes, mtime, width, height, captured_at,
-  camera_make, camera_model, latitude, longitude, exif JSONB, sha256 (indexed), phash BIGINT,
+  camera_make, camera_model, latitude, longitude,
+  city, region, country, place_distance_km (nearest known place), exif JSONB, sha256 (indexed), phash BIGINT,
   phash_b0..phash_b7 SMALLINT (each indexed), status (active|missing|quarantined),
   marked_for_deletion (partial index), last_error, created_at, updated_at`.
   Change detection: `(size_bytes, mtime)` differs → reprocess. Same `sha256` seen at a
@@ -213,6 +214,33 @@ n=4.5k, 3.3 s at n=18k.
 If per-scan cost becomes a problem before embeddings arrive, the next lever is
 incremental similar-grouping — comparing only new hashes against existing bands,
 the way `dedupe/incremental.py` already does for quarantine and restore.
+
+## Place names
+
+`geo/places.py` turns coordinates into the nearest known place, entirely offline:
+a k-d tree over ~150k GeoNames cities bundled with `reverse_geocoder`. A web
+geocoding API was never a candidate — the coordinates of someone's photos are
+exactly what a local-first app must not send anywhere.
+
+Three consequences worth knowing:
+
+- **It names the nearest place, not the place you were in.** In open country the
+  nearest town can be tens of kilometres away, so `Place.distance_km` is part of
+  the result and the UI renders "near Gorham, New Hampshire" past 5 km. Beyond
+  `PLACE_MAX_KM` (default 100) nothing is recorded at all: naming a city across
+  an ocean is worse than admitting we don't know.
+- **The tree costs ~100 MB resident**, so it is imported and built lazily on
+  first use — a library with no GPS data never pays for it — and only ever in
+  the parent process. Building it inside each scan worker would multiply that by
+  the worker count, which is why `_place_fields` is applied where scan results
+  are persisted rather than inside `process_file`.
+- **Place names are stored, not derived per request** (`photos.city/region/
+  country/place_distance_km`, migration 0014). They are what a future
+  group-by-location would filter on, and the read path stays a plain column
+  select. `reverse_geocoder.search` must be called with `mode=1`; the default
+  forks a process pool, which must not happen inside a web worker or a job.
+
+Geocoding never fails a scan: any error yields no place and is logged.
 
 ## Background work
 

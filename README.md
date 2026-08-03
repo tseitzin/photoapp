@@ -7,12 +7,12 @@ are never moved or modified except through two explicit, audited file workflows:
 The app provides browsing by folder/date/camera, metadata search/filtering, exact and
 near-duplicate detection, and a safe-deletion workflow with full audit history.
 
-**Status: Phases 1–7 complete.** Core features shipping: incremental scanning with
+**Status: Phases 1–10 complete.** Core features shipping: incremental scanning with
 live progress, full library browsing (grid, folders, filters, search, lightbox),
 exact SHA-256 duplicate detection + near-duplicates via perceptual hash (LSH-banded)
 with pair-by-pair review, safe quarantine-first file management with audit log,
 physical organize (move folders to a new structure by date/camera/keep, with optional
-rename), and GPS coordinates surfaced in the details panel and lightbox.
+rename), and offline reverse geocoding that names where each photo was taken.
 See [TASKS.md](TASKS.md) for roadmap.
 
 The visual design lives in [`design_handoff_photo_organizer/`](design_handoff_photo_organizer/)
@@ -30,10 +30,14 @@ behavior. Vue 3 components recreate the design; the handoff files must never be 
   run between the two, **⌘/Ctrl+click** to add or remove one. A selection bar shows
   the count and can mark or unmark the whole set for deletion in one call. Selection
   is scoped to the loaded page and clears whenever the grid refetches.
-- **See where a photo was taken**: Coordinates from the EXIF GPS tags appear in the
-  details panel and the lightbox, with a link out to a map. The link is deliberately
-  not an embedded map — nothing leaves the machine unless you click it. Photos indexed
-  before GPS extraction existed can gain coordinates via **Find locations** on the Scan
+- **See where a photo was taken**: EXIF GPS coordinates are turned into a place name
+  ("Boston, Massachusetts") by **offline** reverse geocoding — a k-d tree over ~150k
+  bundled cities, so no coordinate is ever sent to a geocoding service. Shown in the
+  details panel and lightbox with a link out to a map; the link is deliberately not an
+  embedded map, so nothing leaves the machine unless you click it. Because the lookup
+  returns the *nearest* known town, a photo taken away from one reads "near Gorham, New
+  Hampshire" rather than claiming to be there. Photos indexed before GPS extraction
+  existed can gain both coordinates and a place via **Find locations** on the Scan
   screen, which re-reads only their EXIF headers.
 - **Find near-duplicates of one photo**: The lightbox shows a "More like this" strip of
   visually similar photos with their similarity percentage.
@@ -128,13 +132,14 @@ For complete architectural details, data model, design decisions, and tradeoffs,
 │   │   ├── schemas/                 # Pydantic I/O schemas
 │   │   ├── scanner/                 # Photo discovery, EXIF, hashing, thumbnails
 │   │   ├── dedupe/                  # Duplicate grouping, pHash, LSH candidate search
+│   │   ├── geo/                     # Offline reverse geocoding (coordinates → place)
 │   │   ├── files/                   # Path safety, quarantine, organize, audit
 │   │   ├── jobs/                    # In-process background job runner
 │   │   ├── db/                      # SQLAlchemy session, connection pool
 │   │   ├── core/                    # Config (pydantic-settings), structured logging
 │   │   └── main.py                  # FastAPI app initialization
-│   ├── alembic/                     # Database migrations (0001–0013)
-│   ├── tests/                       # pytest (176 tests)
+│   ├── alembic/                     # Database migrations (0001–0014)
+│   ├── tests/                       # pytest (195 tests)
 │   ├── .env.example                 # Configuration template
 │   ├── requirements.txt             # Dependencies
 │   └── requirements-dev.txt         # Test/lint deps (pytest, ruff, mypy)
@@ -245,7 +250,7 @@ ruff format --check .
 mypy app
 ```
 
-All 176 backend tests use temporary directories and generated images only —
+All 195 backend tests use temporary directories and generated images only —
 they never touch a real photo library.
 
 ### Frontend
@@ -260,7 +265,7 @@ npm run test
 npm run lint && npm run type-check
 ```
 
-All 153 frontend tests run in vitest (isolated, mocked API calls).
+All 167 frontend tests run in vitest (isolated, mocked API calls).
 
 ### Both
 
@@ -301,6 +306,7 @@ Defined in `backend/app/core/config.py` as Pydantic `Settings` fields. Copy
 | `THUMBNAIL_SIZE` | int | `512` | Longest-edge pixels for grid thumbnails (generated during scan) |
 | `PREVIEW_SIZE` | int | `2048` | Longest-edge pixels for lightbox previews (generated on first request) |
 | `SIMILAR_HAMMING_THRESHOLD` | int | `6` | Max Hamming distance for "visually similar" (0–7; >7 loses LSH completeness guarantee) |
+| `PLACE_MAX_KM` | float | `100.0` | Past this, record no place name — the nearest known town is too far to mean anything |
 
 ### Frontend
 
@@ -489,10 +495,12 @@ See [CLAUDE.md](CLAUDE.md) for why these are reserved:
 - **HEIC/HEIF support** depends on `pillow-heif` (included in requirements.txt).
 - **Perceptual hash similarity** finds resized/recompressed variants, not crops or
   edits. Image embeddings (CLIP family via pgvector) are the upgrade path.
-- **Locations are coordinates, not place names** — a photo's coordinates appear in the
-  details panel and lightbox with a link out to a map, but there is no reverse
-  geocoding ("Boston, MA"), no map view, and no group-by-location. Offline reverse
-  geocoding is future work.
+- **Place names are the nearest known town, not an address** — reverse geocoding is a
+  nearest-neighbour lookup over populated places, so in open country the named town can
+  be tens of kilometres away (the UI says "near X" past 5 km, and records nothing at all
+  past `PLACE_MAX_KM`). There is no street address, no map view and no
+  group-by-location. The bundled dataset also costs ~100 MB resident once loaded, which
+  is why it is built lazily on first use.
 - **No tags** — the design includes a Tags card on the Organize view; deferred.
 - **Single user, local only, no authentication** — do not expose the backend beyond
   localhost.
@@ -504,7 +512,7 @@ See [CLAUDE.md](CLAUDE.md) for why these are reserved:
 - Image embeddings (CLIP-family) in `photo_embeddings` table + pgvector ANN for
   semantic similarity and "find edited versions".
 - RAW support (metadata-only indexing or `rawpy`-based decode).
-- Location: offline reverse geocoding, a map view, group by location.
+- Location: a map view and group-by-location (place names now exist).
 - Tags (from the design).
 - Dedicated worker process / real queue (Celery/RQ) if in-process jobs become
   limiting.
@@ -515,9 +523,9 @@ See [TASKS.md](TASKS.md) for detailed per-phase tracking.
 
 | Area | Stack |
 |---|---|
-| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (153 tests) |
+| **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (167 tests) |
 | **Styling** | Hand-rolled CSS on design tokens (CSS custom properties); no CSS framework |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (176 tests) |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (195 tests) |
 | **Database** | PostgreSQL 16 (pgvector extension pre-installed for future embeddings) |
 | **Imaging** | Pillow, pillow-heif (HEIC/HEIF), ImageHash (perceptual hash) |
 | **Scanning** | ProcessPoolExecutor for CPU-bound decode/hash work; single-worker thread job runner (DB-persisted state) for coordination |
