@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Max pHash Hamming distance to call two photos "visually similar".
     # Values above 7 lose the completeness guarantee of the 8-band LSH lookup.
     similar_hamming_threshold: int = 6
+    # Reverse geocoding names the *nearest* known place, so a photo taken far
+    # from anywhere gets a far-away name. Past this, record no place at all —
+    # "Reykjavík" for a mid-Atlantic photo is worse than nothing.
+    place_max_km: float = 100.0
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod

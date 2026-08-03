@@ -9,3 +9,8 @@ Pillow>=11,<12
 pillow-heif>=0.21,<1
 # Battle-tested perceptual hashing (pulls numpy/scipy/PyWavelets)
 ImageHash>=4.3,<5
+# Offline reverse geocoding: a k-d tree over ~150k GeoNames cities, bundled as
+# a 7.5MB CSV. Needs only numpy/scipy, which ImageHash already pulls in. Chosen
+# over any web geocoding API because coordinates of the user's photos must
+# never leave the machine. LGPL; not redistributed.
+reverse_geocoder>=1.5,<2
