@@ -9,7 +9,14 @@ import {
   type SimilarPhoto,
 } from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
-import { formatBytes, formatCoordinates, formatCount, formatDate, mapUrl } from '@/utils/format'
+import {
+  formatBytes,
+  formatCoordinates,
+  formatCount,
+  formatDate,
+  formatPlace,
+  mapUrl,
+} from '@/utils/format'
 
 const store = useLibraryStore()
 
@@ -99,6 +106,8 @@ const location = computed(() => {
   const photo = store.lightboxPhoto
   if (!photo || photo.latitude == null || photo.longitude == null) return null
   return {
+    // The place name if we have one, else the raw coordinates.
+    label: formatPlace(photo) ?? formatCoordinates(photo.latitude, photo.longitude),
     text: formatCoordinates(photo.latitude, photo.longitude),
     url: mapUrl(photo.latitude, photo.longitude),
   }
@@ -223,9 +232,9 @@ watch(
         :href="location.url"
         target="_blank"
         rel="noopener noreferrer"
-        :title="`Open ${location.text} in OpenStreetMap`"
+        :title="`${location.text} — open in OpenStreetMap`"
       >
-        📍 {{ location.text }}
+        📍 {{ location.label }}
       </a>
     </p>
 

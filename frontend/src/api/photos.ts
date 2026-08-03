@@ -26,6 +26,13 @@ export interface PhotoRead {
   // GPS decimal degrees; optional so test fixtures predating GPS stay valid.
   latitude?: number | null
   longitude?: number | null
+  // Nearest known place to those coordinates, from offline reverse geocoding.
+  // place_distance_km is how far that place is: the nearest town can be well
+  // away, so the UI says "near X" rather than claiming the photo was taken there.
+  city?: string | null
+  region?: string | null
+  country?: string | null
+  place_distance_km?: number | null
   status: PhotoStatus
   marked_for_deletion: boolean
   created_at: string

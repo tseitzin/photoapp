@@ -2,7 +2,14 @@
 import { computed } from 'vue'
 import { thumbnailUrl } from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
-import { formatBytes, formatCoordinates, formatCount, formatDate, mapUrl } from '@/utils/format'
+import {
+  formatBytes,
+  formatCoordinates,
+  formatCount,
+  formatDate,
+  formatPlace,
+  mapUrl,
+} from '@/utils/format'
 
 const store = useLibraryStore()
 
@@ -12,6 +19,7 @@ const location = computed(() => {
   const photo = store.selectedPhoto
   if (!photo || photo.latitude == null || photo.longitude == null) return null
   return {
+    place: formatPlace(photo),
     text: formatCoordinates(photo.latitude, photo.longitude),
     url: mapUrl(photo.latitude, photo.longitude),
   }
@@ -103,6 +111,7 @@ const metadataRows = computed(() => {
           <template v-if="location">
             <dt>Location</dt>
             <dd>
+              <span v-if="location.place" class="place">{{ location.place }}</span>
               <span class="coords">{{ location.text }}</span>
               <!-- Opening this hands the coordinates to OpenStreetMap, so it
                    stays a link the user chooses to follow rather than an
@@ -295,10 +304,16 @@ const metadataRows = computed(() => {
   word-break: break-all;
 }
 
+.place {
+  display: block;
+  font-weight: 500;
+}
+
 .coords {
   display: block;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .map-link {
