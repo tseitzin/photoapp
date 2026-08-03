@@ -96,6 +96,57 @@ def test_the_backfill_names_places_for_the_photos_it_finds(
     assert photo.region == "Massachusetts"
 
 
+def test_the_backfill_reaches_photos_that_already_have_coordinates(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    """Photos indexed between GPS extraction and place names have coordinates
+    but no place, and rescans skip unchanged files — so the backfill is their
+    only route to one. Selecting only rows with null coordinates stranded them.
+    """
+    make_image(tmp_path / "boston.jpg", gps_ifd_fields=gps_exif(*BOSTON))
+    _index(client, tmp_path)
+    photo = db_session.scalars(select(Photo)).one()
+    photo.city = photo.region = photo.country = None
+    photo.place_distance_km = None
+    db_session.commit()
+    assert photo.latitude is not None  # coordinates kept, place cleared
+
+    result = client.post("/api/maintenance/backfill-gps", json={}).json()
+
+    assert result["updated"] == 1
+    db_session.expire_all()
+    assert db_session.scalars(select(Photo)).one().city == "Boston"
+
+
+def test_geocoding_an_already_located_photo_does_not_reopen_the_file(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    """Its coordinates are already known, so the sweep is a tree lookup only."""
+    image = make_image(tmp_path / "boston.jpg", gps_ifd_fields=gps_exif(*BOSTON))
+    _index(client, tmp_path)
+    photo = db_session.scalars(select(Photo)).one()
+    photo.city = None
+    db_session.commit()
+    image.unlink()  # the file is gone; a place name must still be derivable
+
+    result = client.post("/api/maintenance/backfill-gps", json={}).json()
+
+    assert result["updated"] == 1
+    db_session.expire_all()
+    assert db_session.scalars(select(Photo)).one().city == "Boston"
+
+
+def test_a_fully_located_photo_is_no_longer_a_candidate(client: TestClient, tmp_path: Path) -> None:
+    """Otherwise every run would redo the whole library."""
+    make_image(tmp_path / "boston.jpg", gps_ifd_fields=gps_exif(*BOSTON))
+    _index(client, tmp_path)
+
+    result = client.post("/api/maintenance/backfill-gps", json={}).json()
+
+    assert result["processed"] == 0
+    assert result["updated"] == 0
+
+
 def test_moving_a_photo_carries_the_freshly_geocoded_place_onto_the_kept_row(
     client: TestClient, db_session: Session, tmp_path: Path
 ) -> None:

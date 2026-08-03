@@ -40,8 +40,13 @@ class BackfillResult:
 def backfill_gps(session: Session, after_id: int = 0, limit: int = 1000) -> BackfillResult:
     photos = PhotoRepository(session)
     candidates = photos.gps_backfill_candidates(after_id, limit)
-    found: list[tuple[Photo, float, float]] = []
+    located: list[tuple[Photo, float, float]] = []
+    gained_coordinates = 0
     for photo in candidates:
+        if photo.latitude is not None and photo.longitude is not None:
+            # Already has coordinates and only needs a place name — no file read.
+            located.append((photo, photo.latitude, photo.longitude))
+            continue
         try:
             with Image.open(photo.path) as image:
                 latitude, longitude = _parse_gps(image.getexif())
@@ -50,28 +55,30 @@ def backfill_gps(session: Session, after_id: int = 0, limit: int = 1000) -> Back
         if latitude is not None and longitude is not None:
             photo.latitude = latitude
             photo.longitude = longitude
-            found.append((photo, latitude, longitude))
+            gained_coordinates += 1
+            located.append((photo, latitude, longitude))
 
     # One geocode call for the whole chunk — the tree lookup is vectorised, so
     # batching is far cheaper than a call per photo.
     for (photo, _, _), place in zip(
-        found, lookup_places([(la, lo) for _, la, lo in found]), strict=True
+        located, lookup_places([(la, lo) for _, la, lo in located]), strict=True
     ):
         photo.city = place.city if place else None
         photo.region = place.region if place else None
         photo.country = place.country if place else None
         photo.place_distance_km = place.distance_km if place else None
 
-    updated = len(found)
+    updated = len(located)
     session.commit()
 
     last_id = candidates[-1].id if candidates else None
     has_more = len(candidates) == limit and last_id is not None
     remaining = photos.count_gps_backfill_remaining(last_id) if has_more and last_id else 0
     logger.info(
-        "gps backfill: %d processed, %d updated, %d remaining",
+        "location backfill: %d processed, %d located (%d newly from EXIF), %d remaining",
         len(candidates),
         updated,
+        gained_coordinates,
         remaining,
     )
     return BackfillResult(

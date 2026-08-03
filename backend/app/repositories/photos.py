@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, cast, func, or_, select, update
+from sqlalchemy import ColumnElement, and_, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import BIT
 from sqlalchemy.orm import Session, defer
 
@@ -19,6 +19,15 @@ _EXPAND_EXT: dict[str, list[str]] = {
     "tiff": ["tif", "tiff"],
     "heic": ["heic", "heif"],
 }
+
+
+def _needs_location() -> ColumnElement[bool]:
+    """Either no coordinates yet (read the EXIF), or coordinates that predate
+    place names and have never been geocoded (no file read needed)."""
+    return or_(
+        and_(Photo.latitude.is_(None), Photo.longitude.is_(None)),
+        and_(Photo.latitude.is_not(None), Photo.city.is_(None)),
+    )
 
 
 def expand_ext_filter(values: Sequence[str]) -> list[str]:
@@ -144,15 +153,15 @@ class PhotoRepository:
         )
 
     def gps_backfill_candidates(self, after_id: int, limit: int) -> Sequence[Photo]:
-        """Active photos with no coordinates yet, cursor-paginated by id."""
+        """Active photos the location backfill can still improve.
+
+        Two cases, and the second matters: a photo may already have coordinates
+        from before place names existed. Scans skip unchanged files, so without
+        including those they could never gain a place name.
+        """
         return self._session.scalars(
             select(Photo)
-            .where(
-                Photo.status == "active",
-                Photo.latitude.is_(None),
-                Photo.longitude.is_(None),
-                Photo.id > after_id,
-            )
+            .where(Photo.status == "active", Photo.id > after_id, _needs_location())
             .order_by(Photo.id)
             .limit(limit)
             .options(_NO_EXIF)  # the backfill re-reads EXIF from the file itself
@@ -163,12 +172,7 @@ class PhotoRepository:
             self._session.scalar(
                 select(func.count())
                 .select_from(Photo)
-                .where(
-                    Photo.status == "active",
-                    Photo.latitude.is_(None),
-                    Photo.longitude.is_(None),
-                    Photo.id > after_id,
-                )
+                .where(Photo.status == "active", Photo.id > after_id, _needs_location())
             )
             or 0
         )
