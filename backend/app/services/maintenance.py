@@ -5,17 +5,26 @@ would never gain coordinates on their own. The backfill reads only the EXIF
 header of each candidate (no decode, no hashing, no thumbnails) and walks the
 library in id-cursor chunks; repeat calls with the returned cursor until
 next_after_id is null.
+
+It also names the nearest place for every coordinate it finds, batched — one
+reverse-geocode call per chunk rather than per photo.
 """
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PIL import Image
 from sqlalchemy.orm import Session
 
+from app.geo.places import lookup_places
+
 # Importing scanner.metadata also registers the HEIF opener, so HEIC EXIF works.
 from app.repositories.photos import PhotoRepository
 from app.scanner.metadata import _parse_gps
+
+if TYPE_CHECKING:
+    from app.models import Photo
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +40,7 @@ class BackfillResult:
 def backfill_gps(session: Session, after_id: int = 0, limit: int = 1000) -> BackfillResult:
     photos = PhotoRepository(session)
     candidates = photos.gps_backfill_candidates(after_id, limit)
-    updated = 0
+    found: list[tuple[Photo, float, float]] = []
     for photo in candidates:
         try:
             with Image.open(photo.path) as image:
@@ -41,7 +50,19 @@ def backfill_gps(session: Session, after_id: int = 0, limit: int = 1000) -> Back
         if latitude is not None and longitude is not None:
             photo.latitude = latitude
             photo.longitude = longitude
-            updated += 1
+            found.append((photo, latitude, longitude))
+
+    # One geocode call for the whole chunk — the tree lookup is vectorised, so
+    # batching is far cheaper than a call per photo.
+    for (photo, _, _), place in zip(
+        found, lookup_places([(la, lo) for _, la, lo in found]), strict=True
+    ):
+        photo.city = place.city if place else None
+        photo.region = place.region if place else None
+        photo.country = place.country if place else None
+        photo.place_distance_km = place.distance_km if place else None
+
+    updated = len(found)
     session.commit()
 
     last_id = candidates[-1].id if candidates else None

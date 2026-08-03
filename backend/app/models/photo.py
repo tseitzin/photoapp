@@ -47,6 +47,13 @@ class Photo(Base):
     # GPS coordinates in decimal degrees (double precision — REAL truncates).
     latitude: Mapped[float | None] = mapped_column(Float(53))
     longitude: Mapped[float | None] = mapped_column(Float(53))
+    # Nearest known place to those coordinates, from offline reverse geocoding.
+    # The distance is kept because the nearest town can be far: it lets the UI
+    # say "near Gorham" rather than claiming the photo was taken there.
+    city: Mapped[str | None] = mapped_column(Text)
+    region: Mapped[str | None] = mapped_column(Text)  # state/province (GeoNames admin1)
+    country: Mapped[str | None] = mapped_column(String(2))  # ISO 3166-1 alpha-2
+    place_distance_km: Mapped[float | None] = mapped_column(Float(24))
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
     # 64-bit perceptual hash stored signed; the 8 generated band columns below

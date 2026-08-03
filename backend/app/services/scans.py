@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.geo.places import lookup_place
 from app.jobs.runner import JobRunner
 from app.models import Photo, Scan, ScanError, ScanRoot
 from app.models.scan import ACTIVE_SCAN_STATUSES
@@ -158,6 +159,19 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
             scans.mark_finished(scan, "failed", message=f"{type(exc).__name__}: {exc}")
 
 
+def _place_fields(latitude: float | None, longitude: float | None) -> dict[str, object]:
+    """Nearest-place columns for a coordinate, empty when there isn't one."""
+    place = lookup_place(latitude, longitude)
+    if place is None:
+        return {"city": None, "region": None, "country": None, "place_distance_km": None}
+    return {
+        "city": place.city,
+        "region": place.region,
+        "country": place.country,
+        "place_distance_km": place.distance_km,
+    }
+
+
 def _changed_anything(scan: Scan) -> bool:
     """Did this scan alter the active photo set at all?
 
@@ -270,6 +284,9 @@ def _apply_result(
         "camera_model": meta.camera_model if meta else None,
         "latitude": meta.latitude if meta else None,
         "longitude": meta.longitude if meta else None,
+        # Geocoded here in the parent, never in a pool worker: the lookup tree
+        # is ~100 MB and would be built once per worker.
+        **_place_fields(meta.latitude if meta else None, meta.longitude if meta else None),
         "exif": meta.exif if meta else None,
         "phash": result.phash,
         "last_error": result.error,
@@ -356,6 +373,10 @@ def _record_move(session: Session, scan: Scan, info: ExistingFile, new_path: str
             "camera_model",
             "latitude",
             "longitude",
+            "city",
+            "region",
+            "country",
+            "place_distance_km",
             "exif",
             "sha256",
             "phash",

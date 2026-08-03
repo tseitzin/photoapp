@@ -23,6 +23,13 @@ class PhotoRead(BaseModel):
     camera_model: str | None
     latitude: float | None
     longitude: float | None
+    # Nearest known place to those coordinates. distance_km is part of the
+    # contract: the nearest town can be well away, and the UI says "near X"
+    # rather than claiming the photo was taken there.
+    city: str | None
+    region: str | None
+    country: str | None
+    place_distance_km: float | None
     status: PhotoStatus
     marked_for_deletion: bool
     created_at: datetime
