@@ -2,9 +2,20 @@
 import { computed } from 'vue'
 import { thumbnailUrl } from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
-import { formatBytes, formatCount, formatDate } from '@/utils/format'
+import { formatBytes, formatCoordinates, formatCount, formatDate, mapUrl } from '@/utils/format'
 
 const store = useLibraryStore()
+
+// Only rendered when the photo actually carries coordinates — a "Location: —"
+// row on the ~90% without them would be noise.
+const location = computed(() => {
+  const photo = store.selectedPhoto
+  if (!photo || photo.latitude == null || photo.longitude == null) return null
+  return {
+    text: formatCoordinates(photo.latitude, photo.longitude),
+    url: mapUrl(photo.latitude, photo.longitude),
+  }
+})
 
 const metadataRows = computed(() => {
   const photo = store.selectedPhoto
@@ -88,6 +99,24 @@ const metadataRows = computed(() => {
           <template v-for="row in metadataRows" :key="row.key">
             <dt>{{ row.key }}</dt>
             <dd>{{ row.value }}</dd>
+          </template>
+          <template v-if="location">
+            <dt>Location</dt>
+            <dd>
+              <span class="coords">{{ location.text }}</span>
+              <!-- Opening this hands the coordinates to OpenStreetMap, so it
+                   stays a link the user chooses to follow rather than an
+                   embedded map that would leak them on render. -->
+              <a
+                class="map-link"
+                :href="location.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="`Open ${location.text} in OpenStreetMap`"
+              >
+                View on map ↗
+              </a>
+            </dd>
           </template>
         </dl>
       </template>
@@ -264,6 +293,24 @@ const metadataRows = computed(() => {
 .meta dd {
   margin: 0;
   word-break: break-all;
+}
+
+.coords {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.map-link {
+  display: inline-block;
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.map-link:hover {
+  text-decoration: underline;
 }
 
 .muted {
