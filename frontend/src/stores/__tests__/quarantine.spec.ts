@@ -21,10 +21,22 @@ vi.mock('@/api/photos', () => ({
   listPhotos: vi
     .fn<() => Promise<unknown>>()
     .mockResolvedValue({ items: [], total: 0, limit: 200, offset: 0 }),
+  getFacets: vi
+    .fn<() => Promise<unknown>>()
+    .mockResolvedValue({ file_types: [], cameras: [] }),
+  markPhotos: vi.fn<() => Promise<unknown>>(),
+  unmarkPhotos: vi.fn<() => Promise<unknown>>(),
   thumbnailUrl: (id: number) => `/thumb/${id}`,
+  previewUrl: (id: number) => `/preview/${id}`,
+}))
+vi.mock('@/api/folders', () => ({
+  listFolders: vi.fn<() => Promise<never[]>>().mockResolvedValue([]),
 }))
 
 import { listMarkedForRemoval } from '@/api/duplicates'
+import { getFacets, listPhotos } from '@/api/photos'
+import { listFolders } from '@/api/folders'
+import { useLibraryStore } from '../library'
 
 const quarantineMock = vi.mocked(quarantinePhotos)
 const restoreMock = vi.mocked(restorePhotos)
@@ -124,5 +136,63 @@ describe('quarantine store', () => {
     expect(ok).toBe(false)
     expect(store.error).toContain('Cannot reach')
     expect(store.forceWarning).toBeNull()
+  })
+
+  it('deleting photos refreshes the library that was showing them', async () => {
+    // Otherwise deleted photos stay on the grid with broken thumbnails and a
+    // wrong total until the user reloads by hand.
+    deleteMock.mockResolvedValue(OK_BATCH)
+    const library = useLibraryStore()
+    await library.reload() // the user has opened the Library
+    const store = useQuarantineStore()
+    vi.mocked(listPhotos).mockClear()
+    vi.mocked(getFacets).mockClear()
+    vi.mocked(listFolders).mockClear()
+
+    await store.deletePermanently([9])
+
+    expect(vi.mocked(listPhotos)).toHaveBeenCalled()
+    expect(vi.mocked(getFacets)).toHaveBeenCalled() // facets were never refreshed before
+    expect(vi.mocked(listFolders)).toHaveBeenCalled()
+  })
+
+  it('quarantining and restoring refresh the library too', async () => {
+    quarantineMock.mockResolvedValue(OK_BATCH)
+    restoreMock.mockResolvedValue(OK_BATCH)
+    const library = useLibraryStore()
+    await library.reload()
+    const store = useQuarantineStore()
+    await store.load()
+
+    vi.mocked(getFacets).mockClear()
+    await store.applyRemovals()
+    expect(vi.mocked(getFacets)).toHaveBeenCalled()
+
+    vi.mocked(getFacets).mockClear()
+    await store.restore([1])
+    expect(vi.mocked(getFacets)).toHaveBeenCalled()
+  })
+
+  it('leaves an unopened library alone', async () => {
+    // Nothing has been loaded yet, so there is nothing stale to refresh.
+    deleteMock.mockResolvedValue(OK_BATCH)
+    const store = useQuarantineStore()
+    vi.mocked(getFacets).mockClear()
+
+    await store.deletePermanently([9])
+
+    expect(vi.mocked(getFacets)).not.toHaveBeenCalled()
+  })
+
+  it('a failing library refresh does not mask a successful deletion', async () => {
+    deleteMock.mockResolvedValue(OK_BATCH)
+    const library = useLibraryStore()
+    await library.reload()
+    const store = useQuarantineStore()
+    vi.mocked(listPhotos).mockRejectedValueOnce(new Error('network blip'))
+
+    await store.deletePermanently([9])
+
+    expect(store.lastBatch?.succeeded).toBe(2)
   })
 })

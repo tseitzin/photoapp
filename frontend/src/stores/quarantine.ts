@@ -11,8 +11,11 @@ import {
   type FileOperation,
 } from '@/api/files'
 import { listPhotos, type PhotoRead } from '@/api/photos'
+import { useLibraryStore } from '@/stores/library'
 
 export const useQuarantineStore = defineStore('quarantine', () => {
+  const library = useLibraryStore()
+
   const marked = ref<PhotoRead[]>([])
   const quarantined = ref<PhotoRead[]>([])
   const quarantinedTotal = ref(0)
@@ -56,6 +59,7 @@ export const useQuarantineStore = defineStore('quarantine', () => {
         force,
       )
       await load()
+      await refreshLibrary()
       return true
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
@@ -71,12 +75,29 @@ export const useQuarantineStore = defineStore('quarantine', () => {
     forceWarning.value = null
   }
 
+  /**
+   * These actions move photos in and out of the active set, so the Library's
+   * cached page, folder counts and facets are all stale afterwards. Without
+   * this, deleted photos sat on the grid with broken thumbnails until a manual
+   * reload. Only refresh what has already been loaded, and never let a refresh
+   * failure mask the outcome of the operation itself.
+   */
+  async function refreshLibrary(): Promise<void> {
+    if (!library.hasLoaded) return // never opened — nothing cached to go stale
+    await Promise.all([
+      library.reload().catch(() => {}),
+      library.loadFolders().catch(() => {}),
+      library.loadFacets().catch(() => {}),
+    ])
+  }
+
   async function restore(photoIds: number[]): Promise<void> {
     if (!photoIds.length) return
     error.value = null
     try {
       lastBatch.value = await restorePhotos(photoIds)
       await load()
+      await refreshLibrary()
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
     }
@@ -90,6 +111,7 @@ export const useQuarantineStore = defineStore('quarantine', () => {
       // confirmation dialog has been completed.
       lastBatch.value = await deletePhotosPermanently(photoIds, true)
       await load()
+      await refreshLibrary()
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
     }

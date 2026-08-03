@@ -311,6 +311,78 @@ describe('library store', () => {
     expect(store.selectedIds.size).toBe(0)
   })
 
+  it('a bulk mark reports itself busy so it cannot be fired twice', async () => {
+    listPhotosMock.mockResolvedValue(page([1, 2], 2))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(2, { shift: true, toggle: false })
+    let release = (): void => {}
+    markMock.mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ marked: true, affected: 2 }))),
+    )
+
+    const first = store.setMarkedForSelection(true)
+    expect(store.bulkBusy).toBe(true)
+
+    await store.setMarkedForSelection(true) // second click while in flight
+    release()
+    await first
+
+    expect(store.bulkBusy).toBe(false)
+    expect(markMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a partly failed bulk mark says how many actually landed', async () => {
+    listPhotosMock.mockResolvedValue(page(Array.from({ length: 600 }, (_, i) => i + 1), 600))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    store.clickPhoto(600, { shift: true, toggle: false })
+    // 600 selected spans two 500-id batches; fail only the second.
+    markMock.mockResolvedValueOnce({ marked: true, affected: 500 })
+    markMock.mockRejectedValueOnce(new Error('offline'))
+
+    await store.setMarkedForSelection(true)
+
+    expect(store.error).toContain('500 of 600')
+    expect(store.error).toContain('offline')
+    expect(store.markedOnPage).toBe(500) // the first batch really did apply
+  })
+
+  it('an error can be dismissed without reloading', async () => {
+    listPhotosMock.mockResolvedValue(page([1], 1))
+    const store = useLibraryStore()
+    await store.reload()
+    store.clickPhoto(1)
+    markMock.mockRejectedValueOnce(new Error('offline'))
+    await store.setMarkedForSelection(true)
+    expect(store.error).toContain('offline')
+
+    store.dismissError()
+
+    expect(store.error).toBeNull()
+  })
+
+  it('a slow earlier page response cannot overwrite a newer one', async () => {
+    // Typing in the search box fires one request per debounce window.
+    const store = useLibraryStore()
+    let releaseSlow = (): void => {}
+    listPhotosMock.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseSlow = () => resolve(page([1, 2, 3], 3)))),
+    )
+    listPhotosMock.mockResolvedValueOnce(page([9], 1))
+
+    const stale = store.setSearch('bea')
+    const fresh = store.setSearch('beach')
+    await fresh
+    releaseSlow()
+    await stale
+
+    expect(store.photos.map((p) => p.id)).toEqual([9])
+    expect(store.total).toBe(1)
+  })
+
   it('counts checked folders without double-counting checked descendants', async () => {
     const store = useLibraryStore()
     store.folders = [
