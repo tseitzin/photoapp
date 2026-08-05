@@ -21,6 +21,12 @@ files = ["app"]
 module = ["pillow_heif.*", "reverse_geocoder.*"]
 ignore_missing_imports = true
 
+# opentelemetry-api and -sdk ship py.typed; the instrumentation packages are
+# patchier and trip strict mode.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.instrumentation.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

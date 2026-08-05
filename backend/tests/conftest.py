@@ -5,6 +5,9 @@ import os
 # Log to stdout only, so no test ever appends to the real ~/.aperture/logs.
 # Tests that exercise file logging call setup_logging() themselves with a tmp_path.
 os.environ["LOG_DIR"] = ""
+# Never export spans from the test suite, whatever the developer's .env says —
+# pydantic-settings reads backend/.env, and app = create_app() runs at import.
+os.environ["TELEMETRY_ENABLED"] = "0"
 
 from collections.abc import Iterator
 

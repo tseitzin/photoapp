@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.telemetry import add_attributes, record_failure, span
 from app.geo.places import lookup_place
 from app.jobs.runner import JobRunner
 from app.models import Photo, Scan, ScanError, ScanRoot
@@ -113,50 +114,65 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
 
         roots = _roots_for(session, scan)
         scans.mark_running(scan)
-        try:
-            per_root: list[tuple[dict[str, ExistingFile], set[str]]] = []
-            added_by_sha: dict[str, list[str]] = {}
-            with _batch_processor(settings.scan_workers) as run_batch:
-                for root in roots:
-                    cancelled, existing, seen = _scan_root(
-                        session,
-                        scans,
-                        photos,
-                        scan,
-                        root,
-                        run_batch,
-                        settings.scan_batch_size,
-                        added_by_sha,
-                    )
-                    if cancelled:
-                        scans.mark_finished(scan, "cancelled")
-                        logger.info("scan %s cancelled", scan_id)
-                        return
-                    per_root.append((existing, seen))
-            _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
-            # Duplicate groups derive from photo state — refresh them while the
-            # scan is still "running" so the UI never sees stale groups. When
-            # the scan touched nothing, that state is unchanged and so are the
-            # groups; the rebuild is the most expensive part of a scan, so a
-            # re-scan that finds no changes should cost nothing.
-            if _changed_anything(scan):
-                from app.services.duplicates import rebuild_duplicate_groups
+        # One span for the whole job, deliberately coarse: a span per file
+        # would be ~4,500 per scan, re-encoding what the counters already hold.
+        with span("scan", scan_id=scan_id, roots=len(roots)) as scan_span:
+            try:
+                per_root: list[tuple[dict[str, ExistingFile], set[str]]] = []
+                added_by_sha: dict[str, list[str]] = {}
+                with _batch_processor(settings.scan_workers) as run_batch:
+                    for root in roots:
+                        cancelled, existing, seen = _scan_root(
+                            session,
+                            scans,
+                            photos,
+                            scan,
+                            root,
+                            run_batch,
+                            settings.scan_batch_size,
+                            added_by_sha,
+                        )
+                        if cancelled:
+                            scans.mark_finished(scan, "cancelled")
+                            logger.info("scan %s cancelled", scan_id)
+                            return
+                        per_root.append((existing, seen))
+                _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
+                # Duplicate groups derive from photo state — refresh them while the
+                # scan is still "running" so the UI never sees stale groups. When
+                # the scan touched nothing, that state is unchanged and so are the
+                # groups; the rebuild is the most expensive part of a scan, so a
+                # re-scan that finds no changes should cost nothing.
+                if _changed_anything(scan):
+                    from app.services.duplicates import rebuild_duplicate_groups
 
-                rebuild_duplicate_groups(session)
-            else:
-                logger.info("scan %s changed nothing; keeping existing duplicate groups", scan_id)
-            scans.mark_finished(scan, "completed")
-            logger.info(
-                "scan %s completed: %s found, %s added, %s errors",
-                scan_id,
-                scan.files_found,
-                scan.files_added,
-                scan.error_count,
-            )
-        except Exception as exc:
-            logger.exception("scan %s failed", scan_id)
-            session.rollback()
-            scans.mark_finished(scan, "failed", message=f"{type(exc).__name__}: {exc}")
+                    rebuild_duplicate_groups(session)
+                else:
+                    logger.info(
+                        "scan %s changed nothing; keeping existing duplicate groups", scan_id
+                    )
+                scans.mark_finished(scan, "completed")
+                add_attributes(
+                    scan_span,
+                    files_found=scan.files_found,
+                    files_added=scan.files_added,
+                    files_changed=scan.files_changed,
+                    files_missing=scan.files_missing,
+                    files_moved=scan.files_moved,
+                    errors=scan.error_count,
+                )
+                logger.info(
+                    "scan %s completed: %s found, %s added, %s errors",
+                    scan_id,
+                    scan.files_found,
+                    scan.files_added,
+                    scan.error_count,
+                )
+            except Exception as exc:
+                logger.exception("scan %s failed", scan_id)
+                session.rollback()
+                scans.mark_finished(scan, "failed", message=f"{type(exc).__name__}: {exc}")
+                record_failure(scan_span, exc)
 
 
 def _place_fields(latitude: float | None, longitude: float | None) -> dict[str, object]:

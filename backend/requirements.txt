@@ -14,3 +14,16 @@ ImageHash>=4.3,<5
 # over any web geocoding API because coordinates of the user's photos must
 # never leave the machine. LGPL; not redistributed.
 reverse_geocoder>=1.5,<2
+# Optional tracing (TELEMETRY_ENABLED=1), vendor-neutral so the same spans go to
+# Honeycomb or a local backend with one env var. OTLP over HTTP/protobuf rather
+# than gRPC: same wire support everywhere, without the grpcio binary wheel.
+# Note the instrumentation packages track a 0.Nb0 version line, not the SDK's 1.x.
+opentelemetry-api>=1.30,<2
+opentelemetry-sdk>=1.30,<2
+opentelemetry-exporter-otlp-proto-http>=1.30,<2
+opentelemetry-instrumentation-fastapi>=0.51b0,<1
+# The OTel SDK reads its own OTEL_* vars from the process environment, while
+# pydantic-settings reads .env into Settings — this bridges the two so one .env
+# configures both. Already a hard dependency of pydantic-settings; pinned here
+# because we import it directly.
+python-dotenv>=1.0,<2

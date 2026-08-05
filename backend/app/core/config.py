@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # from anywhere gets a far-away name. Past this, record no place at all —
     # "Reykjavík" for a mid-Atlantic photo is worse than nothing.
     place_max_km: float = 100.0
+    # Tracing is opt-in and must stay off by default: app = create_app() runs at
+    # import, including in the test suite. Destination comes from the SDK's own
+    # OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_EXPORTER_OTLP_HEADERS.
+    telemetry_enabled: bool = False
+    # Print spans instead of exporting them — for checking what would be sent
+    # before anything leaves the machine.
+    telemetry_console_export: bool = False
 
     @field_validator("thumbnail_cache_dir", "quarantine_dir")
     @classmethod
