@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://aperture:aperture@localhost:5435/aperture"
     log_level: str = "INFO"
+    # Where the rotating JSON log lives. Set LOG_DIR="" to log to stdout only
+    # (what the test suite does, so no test ever writes to the real log).
+    log_dir: Path | None = Path("~/.aperture/logs")
     thumbnail_cache_dir: Path = Path("~/.aperture/thumbnails")
     quarantine_dir: Path = Path("~/.aperture/quarantine")
     cors_origin: str = "http://localhost:5173"
@@ -36,6 +39,17 @@ class Settings(BaseSettings):
     @classmethod
     def _expand_user(cls, value: Path) -> Path:
         return value.expanduser()
+
+    @field_validator("log_dir", mode="before")
+    @classmethod
+    def _blank_disables_file_logging(cls, value: object) -> object:
+        # Path("") is Path("."), which would drop a log file in the CWD.
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("log_dir")
+    @classmethod
+    def _expand_optional_user(cls, value: Path | None) -> Path | None:
+        return value.expanduser() if value is not None else None
 
 
 @lru_cache

@@ -1,4 +1,11 @@
+# ruff: noqa: E402 - LOG_DIR must be set before the first app import, because
+# app.db.session calls the lru_cached get_settings() at import time.
 import os
+
+# Log to stdout only, so no test ever appends to the real ~/.aperture/logs.
+# Tests that exercise file logging call setup_logging() themselves with a tmp_path.
+os.environ["LOG_DIR"] = ""
+
 from collections.abc import Iterator
 
 import pytest
@@ -12,7 +19,6 @@ import app.models  # noqa: F401  (registers all tables on Base.metadata)
 from app.db.base import Base
 from app.db.session import get_db, get_session_factory
 from app.jobs.runner import InlineJobRunner, get_job_runner
-from app.main import app
 
 # Dedicated test database (created by scripts/initdb) — never the dev database,
 # and never anything touching a real photo library.
@@ -73,6 +79,10 @@ def db_session(db_session_factory: sessionmaker[Session]) -> Iterator[Session]:
 
 @pytest.fixture
 def client(db_session: Session, db_session_factory: sessionmaker[Session]) -> Iterator[TestClient]:
+    # Imported here rather than at module scope so LOG_DIR above is in place
+    # before create_app() runs.
+    from app.main import app
+
     def _get_db() -> Iterator[Session]:
         yield db_session
 

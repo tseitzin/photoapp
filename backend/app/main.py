@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api import api_router
 from app.core.config import APP_VERSION, get_settings
 from app.core.logging import setup_logging
+from app.core.middleware import RequestContextMiddleware
 from app.services.errors import ConflictError, NotFoundError, ValidationFailedError
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,18 @@ def _service_error_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=_ERROR_STATUS[type(exc)],
         content={"detail": str(exc)},
+    )
+
+
+def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Give unexpected failures the same {"detail": ...} shape as every other error.
+
+    Deliberately silent: RequestContextMiddleware has already logged the
+    traceback along with the request id.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal Server Error"},
     )
 
 
@@ -46,7 +59,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    setup_logging(settings.log_level)
+    setup_logging(settings.log_level, settings.log_dir)
 
     app = FastAPI(title="Aperture", version=APP_VERSION, lifespan=_lifespan)
     app.add_middleware(
@@ -55,8 +68,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Added last, so it wraps CORS too and every response carries a request id.
+    app.add_middleware(RequestContextMiddleware)
     for exc_type in _ERROR_STATUS:
         app.add_exception_handler(exc_type, _service_error_handler)
+    app.add_exception_handler(Exception, _unhandled_error_handler)
     app.include_router(api_router, prefix="/api")
     return app
 
