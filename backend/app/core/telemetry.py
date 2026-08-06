@@ -63,9 +63,11 @@ def setup_telemetry(app: FastAPI, *, enabled: bool, console_export: bool) -> boo
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
+    from app.core.sampling import ParentedClientSpans
+
     os.environ.setdefault("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", _DEFAULT_EXCLUDED_URLS)
 
-    provider = TracerProvider(resource=build_resource(Resource))
+    provider = TracerProvider(resource=build_resource(Resource), sampler=ParentedClientSpans())
     if console_export:
         # Console *instead of* OTLP, so instrumentation can be inspected without
         # sending anything anywhere.
@@ -82,6 +84,7 @@ def setup_telemetry(app: FastAPI, *, enabled: bool, console_export: bool) -> boo
 
     trace.set_tracer_provider(provider)
     FastAPIInstrumentor.instrument_app(app, server_request_hook=redact_url_attributes)
+    instrument_database()
 
     _provider = provider
     _initialized = True
@@ -89,10 +92,31 @@ def setup_telemetry(app: FastAPI, *, enabled: bool, console_export: bool) -> boo
     return True
 
 
+def instrument_database() -> None:
+    """Add a span per SQL statement, nested under the request that ran it.
+
+    Instruments the engine instance rather than patching create_engine: by the
+    time create_app() reaches setup_telemetry it has already included the
+    routers, which import the repositories, which import app.db.session — so the
+    engine exists and a create_engine patch would come too late to see it.
+    """
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+    from app.db.session import engine
+
+    SQLAlchemyInstrumentor().instrument(engine=engine)
+
+
 def shutdown_telemetry() -> None:
     """Flush buffered spans. BatchSpanProcessor drops them without this."""
     global _initialized, _provider
 
+    if _initialized:
+        # Engine event listeners outlive the provider, so a second setup in the
+        # same process would otherwise stack a second span on every query.
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        SQLAlchemyInstrumentor().uninstrument()
     if _provider is not None:
         _provider.shutdown()
     _provider = None

@@ -307,6 +307,18 @@ Defined in `backend/app/core/config.py` as Pydantic `Settings` fields. Copy
 | `PREVIEW_SIZE` | int | `2048` | Longest-edge pixels for lightbox previews (generated on first request) |
 | `SIMILAR_HAMMING_THRESHOLD` | int | `6` | Max Hamming distance for "visually similar" (0–7; >7 loses LSH completeness guarantee) |
 | `PLACE_MAX_KM` | float | `100.0` | Past this, record no place name — the nearest known town is too far to mean anything |
+| `LOG_DIR` | Path\|None | `~/.aperture/logs` | Rotating log files; empty means stdout only |
+| `TELEMETRY_ENABLED` | bool | `False` | Emit OpenTelemetry traces (see [Tracing](#tracing-optional)) |
+| `TELEMETRY_CONSOLE_EXPORT` | bool | `False` | Print spans to the console *instead of* exporting them |
+
+The OTel SDK reads its own `OTEL_*` variables from the process environment rather
+than through `Settings`; `create_app()` bridges `.env` into it so one file
+configures both.
+
+| Variable | Example | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://api.honeycomb.io` | Trace destination; the SDK appends `/v1/traces` |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `x-honeycomb-team=<ingest-key>` | Vendor auth |
 
 ### Frontend
 
@@ -316,7 +328,38 @@ Defined in Vite config, sourced from `frontend/.env` (`.env.example` provided):
 |---|---|---|---|
 | `VITE_API_BASE_URL` | str | `http://localhost:8003` | Backend URL for API calls |
 
-No secrets exist in this app. `.env` files are ignored by git on principle.
+`.env` files are ignored by git. The app holds no user credentials — there is no
+authentication — but enabling tracing puts one real secret in `backend/.env`: the
+vendor ingest key in `OTEL_EXPORTER_OTLP_HEADERS`. Rotate it from the Honeycomb
+environment settings if it is ever exposed.
+
+## Tracing (optional)
+
+Off by default. Turn it on for a session rather than editing `.env`, so the safe
+default stays:
+
+```bash
+# Inspect what would be sent, sending nothing:
+TELEMETRY_ENABLED=1 TELEMETRY_CONSOLE_EXPORT=1 uvicorn app.main:app --port 8003
+
+# Export to the configured endpoint:
+TELEMETRY_ENABLED=1 uvicorn app.main:app --port 8003
+```
+
+You get a span per HTTP request and a nested span per SQL statement, so a slow
+endpoint can be explained rather than merely observed. `/health`, `/thumbnail`
+and `/preview` are excluded — one photo grid requests hundreds of thumbnails.
+
+**Spans never carry a filesystem path, filename, username or machine name.**
+That is enforced by tests, not convention: URL attributes are redacted to the
+path, custom attributes refuse path-like values, failures record an exception's
+type rather than its message, and query spans carry parameterised SQL because
+every value in this codebase is a bind parameter. See
+[ARCHITECTURE.md](docs/ARCHITECTURE.md#observability) for the mechanisms and
+`backend/tests/test_telemetry.py` / `test_db_telemetry.py` for the guarantees.
+
+Because a scan touches every photo, a traced scan emits far more spans than a
+browsing session — worth watching your vendor quota the first time.
 
 ## How scanning works
 
@@ -525,12 +568,13 @@ See [TASKS.md](TASKS.md) for detailed per-phase tracking.
 |---|---|
 | **Frontend** | Vue 3 (Composition API), TypeScript, Vite, Vue Router, Pinia, Vitest (167 tests) |
 | **Styling** | Hand-rolled CSS on design tokens (CSS custom properties); no CSS framework |
-| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (195 tests) |
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, pytest (226 tests) |
 | **Database** | PostgreSQL 16 (pgvector extension pre-installed for future embeddings) |
 | **Imaging** | Pillow, pillow-heif (HEIC/HEIF), ImageHash (perceptual hash) |
 | **Scanning** | ProcessPoolExecutor for CPU-bound decode/hash work; single-worker thread job runner (DB-persisted state) for coordination |
 | **Duplicate detection** | LSH banding (Hamming distance on pHash), SQLAlchemy generated columns, union-find clustering |
 | **File safety** | Path resolution + containment validation, batch-audited operations, soft-delete → quarantine → permanent |
+| **Observability** | Rotating JSON logs; opt-in OpenTelemetry tracing (FastAPI + SQLAlchemy instrumentation) over OTLP/HTTP, vendor-neutral, path-redacting |
 | **Infrastructure** | Docker Compose (Postgres only); frontend/backend run natively on macOS |
 | **CI/CD** | None (local-only development) |
 | **Code quality** | ruff (lint + format), mypy (type check), Vitest (component testing), pytest (integration testing) |

@@ -257,6 +257,50 @@ not a rewrite. No Redis/Celery until the single-process model actually hurts.
 Frontend progress: polling `GET /api/scans/{id}` at ~1s. Chosen over SSE/WebSocket
 for v1 simplicity; SSE is a compatible upgrade if polling feels laggy.
 
+## Observability
+
+Tracing is off unless `TELEMETRY_ENABLED=1`, and vendor-neutral: the same spans
+reach Honeycomb or a local collector by changing `OTEL_EXPORTER_OTLP_ENDPOINT`.
+Turn it on per session rather than in `.env`, so the safe default survives.
+
+```
+GET /api/stats (server)
+├── connect                          (client, first use of a pooled connection)
+├── SELECT count(*) … photos         (client, 19ms)
+├── SELECT count(distinct(regexp_replace(path …)))   (client, 33ms)
+└── … four more
+```
+
+**Nothing on a span describes the library.** This is the constraint the whole
+design answers to — spans leave the machine, and a photo path is both private
+and self-describing. Three mechanisms, each covered by a test rather than a
+convention:
+
+- `redact_url_attributes` reduces `url.full`/`http.target` to the path and blanks
+  `url.query`, because `?folder=/Users/…/Pictures/2019` is an ordinary request.
+- `add_attributes` refuses any custom value that looks like a path, and
+  `record_failure` records an exception's *type* only — an `OSError` message
+  carries the filename it failed on, and a traceback carries source paths.
+- Query spans are safe because every value in this codebase travels as a bind
+  parameter: `db.statement` is parameterised SQL (`WHERE path = %(path_1)s`).
+  `tests/test_db_telemetry.py` pins this with an allowlist of span attributes, so
+  a raw f-string in a repository — or an OTel upgrade that starts attaching a
+  connection string — fails a test instead of shipping paths to a third party.
+
+The resource deliberately omits the process and OS detectors, which would attach
+the hostname and command line.
+
+**Sampling.** `/health`, `/thumbnail` and `/preview` are excluded from HTTP
+tracing because one photo grid requests hundreds of thumbnails. Those requests
+still query the database, so `ParentedClientSpans` drops client spans that have
+no parent — otherwise each excluded request would emit a *rootless* `SELECT`
+span and the exclusion would backfire into more volume than it saved. Server and
+internal spans are unaffected, so a background scan still opens its own trace.
+
+Consequence worth knowing: two queries differing only by a bound value share one
+`db.statement`, so Honeycomb groups them into a single row. In `/api/stats` the
+active-photo count and the missing-photo count look like one query run twice.
+
 ## File-operation safety
 
 - All mutating file ops go through `files/`, which resolves the target with

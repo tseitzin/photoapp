@@ -39,6 +39,12 @@ cd frontend
   creates directories and moves/deletes *files*, through the audited workflows.
   Removing a directory takes an explicit request naming that directory.
 - Tests never touch a real photo library — temp dirs + generated images only.
+- **Telemetry never carries a filesystem path, filename, username or machine
+  name** — spans leave the machine. Custom attributes use ids/counts/outcomes;
+  failures record an exception's type, not its message; DB values stay bind
+  parameters (never build SQL with an f-string). Enforced by
+  `backend/tests/test_telemetry.py` and `test_db_telemetry.py`; keep it that way.
+  Tracing stays off by default — enable it per session, not by editing `.env`.
 - **PostgreSQL, not SQLite** — deliberate stack-consistency choice; don't revisit.
 - Destructive file operations: quarantine-first, explicit confirmation, audit log,
   path-containment validation. Tests before UI.

@@ -22,6 +22,10 @@ opentelemetry-api>=1.30,<2
 opentelemetry-sdk>=1.30,<2
 opentelemetry-exporter-otlp-proto-http>=1.30,<2
 opentelemetry-instrumentation-fastapi>=0.51b0,<1
+# Query-level spans under each request. Safe to send onward because every value
+# in this codebase travels as a bind parameter: db.statement carries the
+# parameterised SQL, never a photo path. Enforced by a test, not by convention.
+opentelemetry-instrumentation-sqlalchemy>=0.51b0,<1
 # The OTel SDK reads its own OTEL_* vars from the process environment, while
 # pydantic-settings reads .env into Settings — this bridges the two so one .env
 # configures both. Already a hard dependency of pydantic-settings; pinned here
