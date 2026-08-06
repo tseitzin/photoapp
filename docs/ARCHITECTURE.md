@@ -301,6 +301,12 @@ Consequence worth knowing: two queries differing only by a bound value share one
 `db.statement`, so Honeycomb groups them into a single row. In `/api/stats` the
 active-photo count and the missing-photo count look like one query run twice.
 
+**Scan cost.** The scan takes one deliberately coarse span for the whole job,
+with per-file totals as `aperture.*` attributes — a span per file would be ~4,500
+per scan, re-encoding what the counters already hold. Measured: a no-change
+rescan of 4,491 photos across 4 roots cost **17 spans** (1 scan, 8 SELECT,
+6 connect, 2 UPDATE) and 1.84s. Volume tracks batches and roots, not library size.
+
 ## File-operation safety
 
 - All mutating file ops go through `files/`, which resolves the target with

@@ -358,8 +358,12 @@ every value in this codebase is a bind parameter. See
 [ARCHITECTURE.md](docs/ARCHITECTURE.md#observability) for the mechanisms and
 `backend/tests/test_telemetry.py` / `test_db_telemetry.py` for the guarantees.
 
-Because a scan touches every photo, a traced scan emits far more spans than a
-browsing session — worth watching your vendor quota the first time.
+Span volume follows batches, not files: the scan job takes one coarse span, and
+per-file counts ride on it as `aperture.*` attributes rather than 4,500 spans.
+A measured no-change rescan of 4,491 photos produced **17 spans** end to end
+(1 scan + 8 SELECT + 6 connect + 2 UPDATE). A scan with many *new* files writes
+per batch (`SCAN_BATCH_SIZE`), so it costs more than that but stays far below
+one-span-per-photo.
 
 ## How scanning works
 
