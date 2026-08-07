@@ -526,6 +526,31 @@ These are safe to delete and will be rebuilt:
 
 Neither is committed to git.
 
+## Watching a large import
+
+A big import is the one time this app does sustained work, and the three places
+it can stall — the worker pool, Postgres, and the scan loop itself — are only
+distinguishable while it runs.
+
+```bash
+scripts/import_report.sh baseline     # before: sizes, vacuum state, resets query stats
+scripts/watch_import.sh 5 /tmp/import.jsonl &   # during: one JSON line every 5s
+scripts/import_report.sh after        # after: slowest and most-called statements
+```
+
+`watch_import.sh` records files/sec alongside per-process CPU and RSS, Postgres
+commit and insert rates, and what backends are waiting on. A saturated pool shows
+as ~100% CPU per worker; one busy process while the rest idle means the parent is
+the bottleneck, not the pool.
+
+`import_report.sh` reads `pg_stat_statements`, which `docker-compose.yml`
+preloads — it cannot be enabled on a running server, so it is on permanently.
+
+Autovacuum matters more than it looks: it triggers on updates and deletes, so an
+insert-only import leaves the visibility map stale and turns index-only scans
+back into heap reads. Migration 0016 lowers the scale factors on `photos`; check
+`last_autovacuum` in the report afterwards to confirm it kept up.
+
 ## Ports (fixed on this machine)
 
 See [CLAUDE.md](CLAUDE.md) for why these are reserved:

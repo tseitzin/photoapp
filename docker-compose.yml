@@ -2,6 +2,14 @@ services:
   db:
     image: pgvector/pgvector:pg16
     container_name: aperture-db
+    # pg_stat_statements has to be preloaded at startup; it cannot be switched on
+    # in a running server. Kept on permanently so a slow query can be attributed
+    # after the fact rather than only while someone is watching.
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.max=5000
+      -c pg_stat_statements.track=all
     environment:
       POSTGRES_USER: aperture
       POSTGRES_PASSWORD: aperture
