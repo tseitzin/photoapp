@@ -334,3 +334,33 @@ def test_a_rescan_that_adds_an_identical_copy_groups_it_as_exact(
         "original.jpg",
         "copy.jpg",
     }
+
+
+def test_a_derived_identity_never_collides_with_a_group_outside_the_subgraph(
+    db_session: Session, add_photo: Callable[..., Photo]
+) -> None:
+    """(kind, key) is unique, and the bounded pass must not create a second row.
+
+    A group can hold the identity a derivation is about to produce without
+    holding any of that derivation's photos — a stale group whose key photo left
+    the active set, say. Scoping by membership alone would miss it and try to
+    insert a duplicate identity, so identity is looked up as well.
+    """
+    stranger, stranger_mate = add_photo("sha-far", FAR), add_photo("sha-far", FAR)
+    rebuild_duplicate_groups(db_session)
+    squatter = db_session.scalar(select(DuplicateGroup))
+    assert squatter is not None
+    # Re-key it onto an identity that does not exist yet, keeping its members.
+    squatter.key = "sha-soon"
+    db_session.commit()
+
+    first, second = add_photo("sha-soon", BASE), add_photo("sha-soon", BASE)
+    rebuild_groups_for(db_session, [first.id, second.id])
+
+    groups = list(db_session.scalars(select(DuplicateGroup)))
+    identities = [(g.kind, g.key) for g in groups]
+    assert len(identities) == len(set(identities)), f"duplicate identity: {identities}"
+    claimed = next(g for g in groups if g.key == "sha-soon")
+    assert {m.photo_id for m in claimed.members} == {first.id, second.id}
+    assert stranger.id not in {m.photo_id for m in claimed.members}
+    assert stranger_mate.id not in {m.photo_id for m in claimed.members}

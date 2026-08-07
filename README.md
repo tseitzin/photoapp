@@ -248,10 +248,15 @@ ruff format --check .
 
 # Type check
 mypy app
+
+# Coverage (branch, not just line)
+pytest --cov=app --cov-branch --cov-report=term-missing
 ```
 
-All 195 backend tests use temporary directories and generated images only —
-they never touch a real photo library.
+All 239 backend tests use temporary directories and generated images only —
+they never touch a real photo library. Coverage sits at 95% of statements;
+what is uncovered is mostly failure plumbing — scan cancellation, the
+process-pool wrapper, and last-resort exception handlers.
 
 ### Frontend
 

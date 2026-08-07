@@ -1,4 +1,7 @@
 pytest>=8.3,<9
+# Branch coverage, not just line: the dedupe passes turn on which side of a
+# threshold a scan falls, and a line-covered branch can still be untaken.
+pytest-cov>=6.0,<8
 httpx>=0.28,<1
 ruff>=0.9,<1
 mypy>=1.14,<2
