@@ -29,13 +29,12 @@ class FolderNode:
 
 def build_folder_tree(session: Session) -> list[FolderNode]:
     roots = ScanRootRepository(session).list_all()
+    # Grouping the stored column rather than deriving it per row keeps this an
+    # index-only scan over (status, directory) — no heap access, no regex.
     dir_rows = session.execute(
-        select(
-            func.regexp_replace(Photo.path, r"/[^/]*$", "").label("dir"),
-            func.count(),
-        )
+        select(Photo.directory, func.count())
         .where(Photo.status != "quarantined")
-        .group_by("dir")
+        .group_by(Photo.directory)
     ).all()
 
     nodes: dict[str, FolderNode] = {}

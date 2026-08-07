@@ -33,6 +33,14 @@ class Photo(Base):
         ForeignKey("scan_roots.id", ondelete="CASCADE"), index=True
     )
     path: Mapped[str] = mapped_column(Text, unique=True)
+    # The containing directory, maintained by the database. Deriving it per row
+    # with regexp_replace() made the folder count and folder tree sequential
+    # scans; stored, with (status, directory) indexed, both are index-only and
+    # never read the heap. Generated from path, so an organize move cannot
+    # leave it stale.
+    directory: Mapped[str] = mapped_column(
+        Text, Computed(r"regexp_replace(path, '/[^/]*$', '')", persisted=True)
+    )
     filename: Mapped[str] = mapped_column(Text)
     ext: Mapped[str] = mapped_column(String(10))
     mime: Mapped[str] = mapped_column(String(32))
@@ -55,7 +63,11 @@ class Photo(Base):
     country: Mapped[str | None] = mapped_column(String(2))  # ISO 3166-1 alpha-2
     place_distance_km: Mapped[float | None] = mapped_column(Float(24))
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    # Indexed by ix_photos_status_sha256_size rather than on its own: every
+    # sha256 lookup in the codebase filters status='active' alongside it, and
+    # carrying size_bytes lets the stats duplicate-preview aggregate run
+    # index-only instead of reading the whole heap.
+    sha256: Mapped[str | None] = mapped_column(String(64))
     # 64-bit perceptual hash stored signed; the 8 generated band columns below
     # implement LSH candidate lookup: any two hashes within Hamming distance 7
     # agree exactly on at least one byte-band (pigeonhole), so an indexed
@@ -121,6 +133,12 @@ class Photo(Base):
         # there is no NULLS-position mismatch). Likewise size_asc/size_desc.
         Index("ix_photos_status_filename", "status", "filename", "id"),
         Index("ix_photos_status_size", "status", "size_bytes", "id"),
+        # Folder count and folder tree, both index-only: the directory rides in
+        # the index, so neither query reads the heap (and so neither pays for
+        # the ~1.3 KB exif blob stored on every row).
+        Index("ix_photos_status_directory", "status", "directory"),
+        # Exact-duplicate lookups, and the stats duplicate preview index-only.
+        Index("ix_photos_status_sha256_size", "status", "sha256", "size_bytes"),
         # Folder filter: path LIKE '<dir>/%'. The unique index on path uses the
         # database collation (en_US.utf8) and cannot serve a prefix LIKE.
         Index("ix_photos_path_prefix", "path", postgresql_ops={"path": "text_pattern_ops"}),

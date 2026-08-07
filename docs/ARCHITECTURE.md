@@ -104,7 +104,7 @@ scans ──────┘      ├──▶ file_operations (audit)
 
 Originals are never stored in Postgres — paths and metadata only.
 
-### Indexing strategy (migration 0013)
+### Indexing strategy (migrations 0013, 0015, 0016)
 
 The Library's list query filters on `status` plus any of folder / extension /
 camera / filename, and sorts by capture date, filename or size. Each index
@@ -120,6 +120,8 @@ in output order instead of sorting:
 | `(status, size_bytes, id)` | size, both directions |
 | `path text_pattern_ops` | the folder filter's `LIKE 'dir/%'`; the unique index on `path` uses the database collation and cannot serve a prefix match |
 | GIN `pg_trgm` on `filename` | filename search's leading-wildcard `ILIKE` |
+| `(status, directory)` | the folder count and folder tree, both index-only |
+| `(status, sha256, size_bytes)` | exact-duplicate lookups, and the stats duplicate preview index-only |
 
 `status` has no index of its own — essentially every row is `active`, so alone it
 has no selectivity. `marked_for_deletion` is partial (`WHERE marked_for_deletion`)
@@ -134,6 +136,37 @@ Two rules that keep this honest:
 - **List queries defer `photos.exif`.** It averages ~1.3 KB and lives inline in the
   heap, so it dominates the bytes a page read touches, and no list schema exposes
   it. Only `PhotoDetail`, via `get()`, loads it.
+
+### Aggregates read the index, not the table
+
+`GET /api/stats` and `GET /api/folders` used to be four sequential scans of a
+27 MB table, two of them deriving `regexp_replace(path, '/[^/]*$', '')` per row —
+a function call no index can serve. `photos.directory` is now a stored generated
+column, so the derivation happens once at write time and both queries walk
+`(status, directory)` without touching the heap. Measured on 100k rows over 2,000
+folders: the folder count went 169.7 ms / 16,670 buffers to 6.5 ms / 93, and the
+folder tree 88.9 ms / 16,704 to 9.1 ms / 93.
+
+Two details that decide whether any of this pays off:
+
+- **`count(DISTINCT x)` makes the planner sort every row.** Grouping in a subquery
+  and counting the groups produces the same answer from an index-only scan. The
+  same rewrite, same index, six times quicker.
+- **An index-only scan is only index-only when the visibility map is current,**
+  and autovacuum's defaults do not suit an imported library: it triggers on
+  updates and deletes, so inserting 50k photos leaves the map stale and every
+  "index-only" scan falls back to the heap. Measured on the real library, a plain
+  `VACUUM` turned `count(*)` from a 1,024-buffer sequential scan (7.07 ms) into an
+  8-buffer index-only scan with zero heap fetches (0.41 ms). Migration 0016 lowers
+  the vacuum, insert-vacuum and analyze scale factors on `photos` so a large
+  import is followed by a vacuum instead of waiting for 20% churn.
+
+`exif` storage was *not* changed. It was a candidate — inline at ~1.3 KB, it made
+every sequential scan a third more expensive — but the scans that suffered are
+now index-only and never read it, list queries already defer it, and a
+`LIMIT`-bounded index scan costs the same with or without it (measured: 98 buffers
+either way). Moving it out of line would have added a TOAST fetch to the detail
+view in exchange for nothing.
 
 ## Scan pipeline
 
