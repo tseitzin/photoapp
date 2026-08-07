@@ -192,6 +192,37 @@ Decisions worth recording:
   only as a query-level pre-filter.
 - **CPU-bound work (decode, hash) runs in a `ProcessPoolExecutor`** so the event loop
   stays responsive; DB writes happen on the async side in batches.
+- **A reader thread pulls files into the page cache ahead of the pool**
+  (`SCAN_PREFETCH`, 0 disables), so a worker's core does not idle waiting on the
+  disk. It passes nothing between processes — the payload is the page cache, and
+  a pickled buffer would cost more than the stall it removes.
+
+### What actually limits an import
+
+Measured importing 1,556 phone photos (3.3 GB, 41% HEIC) from a USB drive, on an
+M3 with 7 workers: **83.8s, 18.6 photos/s, zero errors**. Where that went:
+
+| | |
+|---|---|
+| SQL, whole import | 140 ms — 0.17%, and inserts batch 1,000 rows into 2 statements |
+| reverse geocoding | 17 ms for 1,386 lookups, though it runs in the parent |
+| scan orchestration | ~5s — the bare pool over the same files took 79.2s of the 83.8s |
+| everything else | decode, hash, pHash, thumbnail |
+
+So the scan pipeline is not the cost; `process_file` is. HEIC costs 213 ms per
+photo against JPEG's 64 ms, and decode throughput plateaus at **3.2x** no matter
+how many workers are added — an M3 has 4 performance and 4 efficiency cores, and
+the efficiency cores contribute little to image decoding. 4 workers reach 3.01x,
+7 reach 3.22x; the extra three buy 7% for about 2.3 GB of resident memory.
+
+The drive is the other wall: 116 MB/s sequential, and **115 MB/s with seven
+concurrent readers** — 0.99x. Concurrency cannot make it faster, which is why
+reading ahead on one thread is the only lever available on the I/O side.
+
+Worth knowing when a count looks wrong: `SUPPORTED_EXTENSIONS` has no video
+formats, so `.mov`/`.mp4` are skipped at discovery, and an ExFAT volume carries
+an AppleDouble `._` stub beside every file which is skipped as a dotfile. The
+import above found 1,556 photos in a folder of 1,579 files for those two reasons.
 - Corrupt/undecodable files still get sha256 + a `photos` row with `last_error` set.
 
 ## Duplicate detection

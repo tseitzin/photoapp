@@ -8,13 +8,14 @@ resumability model).
 
 import logging
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from threading import Event, Semaphore, Thread
 
 from opentelemetry.trace import Span
 from sqlalchemy import func, select
@@ -272,6 +273,47 @@ def _roots_for(session: Session, scan: Scan) -> list[ScanRoot]:
     return [root for root in repo.list_all() if root.enabled]
 
 
+def _prefetch(paths: Sequence[str], done: Semaphore, stop: Event) -> None:
+    """Pull files into the OS page cache ahead of the pool.
+
+    A worker reads a file and then decodes it, so its core idles while the disk
+    works. Reading ahead on a separate thread keeps the disk busy, so by the time
+    a worker opens a file the bytes are already cached. Nothing is passed between
+    processes: the payload is the page cache, not a pickled buffer, which would
+    cost more than the stall it removes.
+
+    **The gain is real but modest, and smaller than it first appeared.** Three
+    cold-cache A/B runs against an external USB drive came out at 1.08x, 1.11x
+    and 1.40x — positive every time, never negative, but not resolvable more
+    precisely than that: the drive's own throughput wandered between 20 and
+    91 MB/s across blocks of the same run, which is a far bigger effect than the
+    one being measured. An earlier reading of the import numbers suggested reads
+    and decoding were fully serialised and that this would roughly halve import
+    time. It does not: a cold baseline run reaches close to the decode-only rate
+    on its own, so most of the overlap was already happening.
+
+    Kept because the direction is consistent and the mechanism is sound, and
+    because SCAN_PREFETCH=0 turns it off if it ever looks otherwise.
+
+    `done` bounds how far ahead this runs — released once per completed photo.
+    Without it, a big enough batch would evict the pages it just loaded before
+    any worker got to them.
+    """
+    for path in paths:
+        while not done.acquire(timeout=0.5):
+            if stop.is_set():
+                return
+        if stop.is_set():
+            return
+        try:
+            with open(path, "rb") as handle:
+                while handle.read(1 << 20):
+                    pass
+        except OSError:
+            # The pool reports read failures properly; this is only a warm-up.
+            continue
+
+
 @contextmanager
 def _batch_processor(workers: int) -> Iterator[BatchProcessor]:
     """Serial when workers=0; otherwise a process pool for CPU-bound decode/hash."""
@@ -285,8 +327,27 @@ def _batch_processor(workers: int) -> Iterator[BatchProcessor]:
         yield lambda paths: [worker_fn(path) for path in paths]
         return
     max_workers = workers if workers > 0 else max(1, (os.cpu_count() or 2) - 1)
+    lookahead = max(max_workers * 4, settings.scan_prefetch)
+
+    def run(paths: Sequence[str]) -> list[ProcessedFile]:
+        if not settings.scan_prefetch:
+            return list(pool.map(worker_fn, paths, chunksize=8))
+        done = Semaphore(lookahead)
+        stop = Event()
+        reader = Thread(target=_prefetch, args=(paths, done, stop), daemon=True)
+        reader.start()
+        try:
+            results = []
+            for result in pool.map(worker_fn, paths, chunksize=8):
+                results.append(result)
+                done.release()
+            return results
+        finally:
+            stop.set()
+            reader.join(timeout=2)
+
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        yield lambda paths: list(pool.map(worker_fn, paths, chunksize=8))
+        yield run
 
 
 def _scan_root(

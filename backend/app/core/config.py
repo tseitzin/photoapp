@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # -1 = one process per core minus one; 0 = in-process serial (tests/debugging)
     scan_workers: int = -1
     scan_batch_size: int = 500
+    # Files to read ahead of the pool, so decoding overlaps disk reads instead of
+    # queuing behind them. 0 disables it. The floor is four per worker; raising it
+    # only helps a disk slower than the decoders, and reading too far ahead evicts
+    # the pages before a worker gets to them.
+    scan_prefetch: int = 64
     # Mark scans orphaned by a crash/restart as failed on startup (off in tests).
     recover_scans_on_startup: bool = True
     # Longest-edge pixels: grid thumbnails (generated during scans) and

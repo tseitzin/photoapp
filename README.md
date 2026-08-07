@@ -307,6 +307,7 @@ Defined in `backend/app/core/config.py` as Pydantic `Settings` fields. Copy
 | `CORS_ORIGIN` | str | `http://localhost:5173` | Frontend origin allowed by CORS |
 | `SCAN_WORKERS` | int | `-1` | Scan CPU workers: -1 = (cores - 1), 0 = serial (debug), N = exactly N |
 | `SCAN_BATCH_SIZE` | int | `500` | Photos processed and committed per batch during scan |
+| `SCAN_PREFETCH` | int | `64` | Files read ahead of the pool so decoding overlaps disk reads; 0 disables |
 | `RECOVER_SCANS_ON_STARTUP` | bool | `True` | Mark orphaned scans (by crash/restart) as failed on startup |
 | `THUMBNAIL_SIZE` | int | `512` | Longest-edge pixels for grid thumbnails (generated during scan) |
 | `PREVIEW_SIZE` | int | `2048` | Longest-edge pixels for lightbox previews (generated on first request) |
