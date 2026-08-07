@@ -11,11 +11,13 @@ import os
 from collections.abc import Callable, Iterator
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
-from sqlalchemy import select
+from opentelemetry.trace import Span
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -98,6 +100,35 @@ class ScanService:
         return list(items), total
 
 
+@dataclass
+class TouchedPhotos:
+    """Which photos a scan altered, for the bounded duplicate rebuild.
+
+    Additions are collected as paths because a new row has no id until it is
+    flushed, and `path` is unique. They are resolved after the move/missing pass,
+    which can delete an added row: `_record_move` keeps the original photo and
+    retargets it at the new path, so resolving by path then yields whichever row
+    actually survived.
+
+    Moves are deliberately absent — a move changes only where the bytes live,
+    and duplicate groups are derived from content.
+    """
+
+    added_paths: set[str] = field(default_factory=set)
+    ids: set[int] = field(default_factory=set)
+
+    def resolve(self, session: Session) -> set[int]:
+        resolved = set(self.ids)
+        paths = sorted(self.added_paths)
+        for start in range(0, len(paths), 5_000):
+            resolved.update(
+                session.scalars(
+                    select(Photo.id).where(Photo.path.in_(paths[start : start + 5_000]))
+                ).all()
+            )
+        return resolved
+
+
 def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
     """Background job body. Opens its own session; safe to run in any runner."""
     settings = get_settings()
@@ -120,6 +151,7 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
             try:
                 per_root: list[tuple[dict[str, ExistingFile], set[str]]] = []
                 added_by_sha: dict[str, list[str]] = {}
+                touched = TouchedPhotos()
                 with _batch_processor(settings.scan_workers) as run_batch:
                     for root in roots:
                         cancelled, existing, seen = _scan_root(
@@ -131,22 +163,21 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
                             run_batch,
                             settings.scan_batch_size,
                             added_by_sha,
+                            touched,
                         )
                         if cancelled:
                             scans.mark_finished(scan, "cancelled")
                             logger.info("scan %s cancelled", scan_id)
                             return
                         per_root.append((existing, seen))
-                _reconcile_moves_and_missing(session, scan, per_root, added_by_sha)
+                _reconcile_moves_and_missing(session, scan, per_root, added_by_sha, touched)
                 # Duplicate groups derive from photo state — refresh them while the
                 # scan is still "running" so the UI never sees stale groups. When
                 # the scan touched nothing, that state is unchanged and so are the
                 # groups; the rebuild is the most expensive part of a scan, so a
                 # re-scan that finds no changes should cost nothing.
                 if _changed_anything(scan):
-                    from app.services.duplicates import rebuild_duplicate_groups
-
-                    rebuild_duplicate_groups(session)
+                    _refresh_duplicate_groups(session, scan_id, touched, scan_span)
                 else:
                     logger.info(
                         "scan %s changed nothing; keeping existing duplicate groups", scan_id
@@ -186,6 +217,43 @@ def _place_fields(latitude: float | None, longitude: float | None) -> dict[str, 
         "country": place.country,
         "place_distance_km": place.distance_km,
     }
+
+
+# Above this share of the active library, the bounded pass stops paying: its
+# subgraph approaches the whole library anyway, and the full derivation gets
+# there in one pass instead of one plus the candidate lookups that bound it.
+_FULL_REBUILD_TOUCHED_SHARE = 0.25
+
+
+def _refresh_duplicate_groups(
+    session: Session, scan_id: int, touched: TouchedPhotos, scan_span: Span
+) -> None:
+    """Re-derive duplicate groups, bounded to what this scan changed.
+
+    The full pass costs O(n^2/64) distance checks over the whole library, so an
+    import of a few hundred photos into a large one used to pay for every photo
+    already indexed. Falls back to the full pass when the scan rewrote enough of
+    the library that bounding it saves nothing.
+    """
+    from app.services.duplicates import rebuild_duplicate_groups, rebuild_groups_for
+
+    touched_ids = touched.resolve(session)
+    active = session.scalar(select(func.count()).select_from(Photo).where(Photo.status == "active"))
+    share = len(touched_ids) / active if active else 1.0
+
+    if not touched_ids or share > _FULL_REBUILD_TOUCHED_SHARE:
+        add_attributes(scan_span, dedupe_pass="full", dedupe_touched=len(touched_ids))
+        logger.info(
+            "scan %s: full duplicate rebuild (%d of %d active photos touched)",
+            scan_id,
+            len(touched_ids),
+            active or 0,
+        )
+        rebuild_duplicate_groups(session)
+        return
+
+    add_attributes(scan_span, dedupe_pass="bounded", dedupe_touched=len(touched_ids))
+    rebuild_groups_for(session, touched_ids)
 
 
 def _changed_anything(scan: Scan) -> bool:
@@ -230,6 +298,7 @@ def _scan_root(
     run_batch: BatchProcessor,
     batch_size: int,
     added_by_sha: dict[str, list[str]],
+    touched: TouchedPhotos,
 ) -> tuple[bool, dict[str, ExistingFile], set[str]]:
     """Walk one root. Returns (cancelled, existing index, paths seen on disk)."""
     existing = photos.index_for_root(root.id)
@@ -239,7 +308,7 @@ def _scan_root(
     def flush() -> bool:
         if pending:
             for result in run_batch(pending):
-                _apply_result(session, scans, scan, root, existing, result, added_by_sha)
+                _apply_result(session, scans, scan, root, existing, result, added_by_sha, touched)
             scan.current_path = pending[-1]
             pending.clear()
         session.commit()
@@ -278,6 +347,7 @@ def _apply_result(
     existing: dict[str, ExistingFile],
     result: ProcessedFile,
     added_by_sha: dict[str, list[str]],
+    touched: TouchedPhotos,
 ) -> None:
     if result.error is not None:
         scans.add_error(scan, result.path, result.error)
@@ -320,6 +390,7 @@ def _apply_result(
             )
         )
         scan.files_added += 1
+        touched.added_paths.add(result.path)
         if result.sha256 is not None:
             added_by_sha.setdefault(result.sha256, []).append(result.path)
     else:
@@ -328,6 +399,7 @@ def _apply_result(
             for key, value in fields.items():
                 setattr(photo, key, value)
         scan.files_changed += 1
+        touched.ids.add(known.photo_id)
     scan.files_processed += 1
 
 
@@ -336,6 +408,7 @@ def _reconcile_moves_and_missing(
     scan: Scan,
     per_root: list[tuple[dict[str, ExistingFile], set[str]]],
     added_by_sha: dict[str, list[str]],
+    touched: TouchedPhotos,
 ) -> None:
     """Pair vanished paths with same-content additions (moves); flag the rest missing.
 
@@ -354,6 +427,8 @@ def _reconcile_moves_and_missing(
                 if photo is not None:
                     photo.status = "missing"
                 scan.files_missing += 1
+                # Leaving the active set can shrink or dissolve its groups.
+                touched.ids.add(info.photo_id)
     session.commit()
 
 

@@ -211,9 +211,43 @@ n=4.5k, 3.3 s at n=18k.
   and lost nothing cannot change them. Without the guard, the most expensive part
   of a scan ran on every no-op rescan.
 
-If per-scan cost becomes a problem before embeddings arrive, the next lever is
-incremental similar-grouping — comparing only new hashes against existing bands,
-the way `dedupe/incremental.py` already does for quarantine and restore.
+### The bounded rebuild
+
+n²/64 is paid over the *whole library*, so importing a few hundred photos into a
+large one used to re-derive every group from every photo. `rebuild_groups_for`
+bounds the work to a subgraph around what the scan changed; `execute_scan` uses
+it and falls back to the full pass once a scan has touched more than 25% of the
+active library, where bounding no longer saves anything.
+
+Measured against a synthetic library of uniformly random hashes:
+
+| library | imported | full pass | bounded | |
+|---|---|---|---|---|
+| 50,000 | 200 | 7.46 s | 0.15 s | 51× |
+| 100,000 | 200 | 29.7 s | 0.25 s | 121× |
+| 100,000 | 1,000 | 30.3 s | 0.59 s | 51× |
+| 100,000 | 5,000 | 32.6 s | 2.01 s | 16× |
+
+The bounded pass tracks *import* size, not library size — which is the point.
+
+Two things make it correct, and one nearly made it useless:
+
+- **The subgraph must be closed.** It holds whole components, not just the new
+  photos and their neighbours, or a derivation would split a group that extends
+  past its edge. Scope is seeded from the neighbours rather than from the touched
+  photos alone: a new photo belongs to no group yet, so the group it is about to
+  join is only reachable through the neighbour it joins. Components are maximal
+  and adding photos only ever merges them, never splits one, so nothing outside
+  the subgraph can be within the threshold of anything inside it.
+- **Only in-scope groups may be deleted.** The full pass deletes any group absent
+  from its derivation; here that would delete every untouched group in the library.
+- **Band equality alone cannot select the neighbours.** It is a candidate filter
+  with a ~1/32 false-positive rate per pair. That is fine for one hash, and
+  useless in bulk — the band values of 200 seeds cover most of each band's 256
+  possible values, so nearly every photo "matches" and the subgraph becomes the
+  whole library. The first implementation did exactly this and measured *slower*
+  than the full pass. The distance check therefore happens in SQL, in
+  `_neighbour_ids`, against the same indexed bands the lightbox uses.
 
 ## Place names
 
