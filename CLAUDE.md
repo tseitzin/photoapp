@@ -44,7 +44,12 @@ cd frontend
   failures record an exception's type, not its message; DB values stay bind
   parameters (never build SQL with an f-string). Enforced by
   `backend/tests/test_telemetry.py` and `test_db_telemetry.py`; keep it that way.
-  Tracing stays off by default — enable it per session, not by editing `.env`.
+- **`TELEMETRY_ENABLED=1` in `backend/.env` on this machine is deliberate — do not
+  "fix" it back to `0`.** Honeycomb is the monitoring for this app, and a flag
+  re-typed on every `uvicorn` invocation is one that gets forgotten; the app then
+  goes dark while looking perfectly healthy. The *committed* default in
+  `.env.example` stays `0`, so a fresh clone still sends nothing until someone
+  opts in. See the Tracing section in README.md.
 - **PostgreSQL, not SQLite** — deliberate stack-consistency choice; don't revisit.
 - Destructive file operations: quarantine-first, explicit confirmation, audit log,
   path-containment validation. Tests before UI.

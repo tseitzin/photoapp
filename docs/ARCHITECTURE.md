@@ -359,7 +359,9 @@ for v1 simplicity; SSE is a compatible upgrade if polling feels laggy.
 
 Tracing is off unless `TELEMETRY_ENABLED=1`, and vendor-neutral: the same spans
 reach Honeycomb or a local collector by changing `OTEL_EXPORTER_OTLP_ENDPOINT`.
-Turn it on per session rather than in `.env`, so the safe default survives.
+The committed default in `.env.example` is off, so a fresh clone sends nothing;
+a machine that is actually being monitored sets it in its own gitignored `.env`
+rather than re-typing it per session. See README's Tracing section for why.
 
 ```
 GET /api/stats (server)
@@ -404,6 +406,49 @@ with per-file totals as `aperture.*` attributes — a span per file would be ~4,
 per scan, re-encoding what the counters already hold. Measured: a no-change
 rescan of 4,491 photos across 4 roots cost **17 spans** (1 scan, 8 SELECT,
 6 connect, 2 UPDATE) and 1.84s. Volume tracks batches and roots, not library size.
+
+### Why there is no Collector
+
+The process exports OTLP/HTTP straight to the configured endpoint. A collector
+earns its place when you need data *processing*, *multiple sources*, or *multiple
+destinations* — which is Honeycomb's and OpenTelemetry's own framing, not a
+simplification. None of the three applies here: one service, one destination, and
+redaction that happens at source and is pinned by tests rather than by a pipeline
+stage. Measured volume is 146 spans per 24h against an allowance of 20M events
+per month, so nothing is being smoothed out either.
+
+What that costs, stated plainly rather than discovered later:
+
+- `BatchSpanProcessor` holds roughly five seconds. If the endpoint is unreachable
+  or the process is killed, that much is lost. Acceptable for a local app whose
+  telemetry is for insight, not billing or audit.
+- Traces are the only signal. Logs stay in `LOG_DIR` and are deliberately not
+  shipped — they carry the paths and filenames the spans exclude. There are no
+  host or database metrics.
+
+**Revisit when any of these becomes true.** Deferring is cheap: the destination
+is already an environment variable, so pointing at a collector needs no code
+change, only `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+1. **A second app is instrumented.** The strongest reason. A collector becomes one
+   egress point, and the ingest key stops being copied into every app's `.env`.
+2. **Postgres metrics are wanted continuously** rather than on demand through
+   `scripts/import_report.sh`. The `postgresql` receiver reports autovacuum,
+   cache-hit and index statistics that the SDK cannot see — the same numbers that
+   turned out to matter most when tuning for a growing library.
+3. **Telemetry needs to survive the endpoint being unreachable.**
+4. **Dual-shipping, or swapping vendor.**
+
+One non-obvious trap, recorded so it is not learned the hard way: the
+`hostmetrics` receiver run *inside* Docker Desktop on macOS measures the Linux VM,
+not the Mac. The CPU and memory figures used to diagnose import throughput cannot
+be reproduced that way; host metrics need the collector running natively.
+
+When it is added, the low-friction shape is a second service in the existing
+`docker-compose.yml`. The app already requires `docker compose up -d` for
+Postgres, so a collector alongside it is not another thing to remember: the app
+points at `http://localhost:4318`, and the ingest key moves out of `backend/.env`
+into the collector's config.
 
 ## File-operation safety
 
