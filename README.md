@@ -341,16 +341,29 @@ environment settings if it is ever exposed.
 
 ## Tracing (optional)
 
-Off by default. Turn it on for a session rather than editing `.env`, so the safe
-default stays:
+Off in the committed default (`.env.example`), so a fresh checkout sends nothing
+until someone opts in. Two ways to opt in, and the right one depends on whether
+tracing is a debugging session or the monitoring:
 
 ```bash
-# Inspect what would be sent, sending nothing:
-TELEMETRY_ENABLED=1 TELEMETRY_CONSOLE_EXPORT=1 uvicorn app.main:app --port 8003
-
-# Export to the configured endpoint:
+# For one session — the endpoint stays unconfigured otherwise:
 TELEMETRY_ENABLED=1 uvicorn app.main:app --port 8003
+
+# Inspect exactly what would be sent, sending nothing:
+TELEMETRY_ENABLED=1 TELEMETRY_CONSOLE_EXPORT=1 uvicorn app.main:app --port 8003
 ```
+
+**If a backend is actually being monitored, set `TELEMETRY_ENABLED=1` in the local
+`.env` instead.** A flag that must be remembered on every `uvicorn` invocation is
+one that gets forgotten, and the failure is silent — the app goes dark while
+looking perfectly healthy. `.env` is gitignored, so this is a per-machine choice
+and does not change what a fresh clone does.
+
+There is **no OpenTelemetry Collector**: the process exports OTLP/HTTP straight to
+the configured endpoint. One less thing to run, at the cost of no local buffering
+— if the endpoint is unreachable, `BatchSpanProcessor` drops what it is holding
+(roughly the last 5 seconds). Traces are the only signal exported; logs stay in
+`LOG_DIR` and are not shipped.
 
 You get a span per HTTP request and a nested span per SQL statement, so a slow
 endpoint can be explained rather than merely observed. `/health`, `/thumbnail`
