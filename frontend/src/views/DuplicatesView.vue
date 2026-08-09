@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import type { DuplicateKind } from '@/api/duplicates'
-import { thumbnailUrl } from '@/api/photos'
+import LoadMore from '@/components/common/LoadMore.vue'
 import DuplicateCompare from '@/components/duplicates/DuplicateCompare.vue'
+import DuplicateGroupCard from '@/components/duplicates/DuplicateGroupCard.vue'
 import { useDuplicatesStore } from '@/stores/duplicates'
 import { formatBytes, formatCount } from '@/utils/format'
 
@@ -62,34 +63,8 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
     </p>
 
     <div v-else class="list">
-      <article v-for="group in store.groups" :key="group.id" class="card">
-        <div class="thumbs">
-          <img
-            v-for="member in group.members.slice(0, 4)"
-            :key="member.photo.id"
-            :src="thumbnailUrl(member.photo.id)"
-            :alt="member.photo.filename"
-            loading="lazy"
-          />
-          <span v-if="group.members.length > 4" class="more">
-            +{{ group.members.length - 4 }}
-          </span>
-        </div>
-        <div class="card-body">
-          <p class="card-title">
-            <span class="badge" :class="group.kind === 'exact' ? 'badge--exact' : 'badge--similar'">
-              {{ group.kind === 'exact' ? 'Exact duplicates' : 'Visually similar' }}
-            </span>
-            <span class="badge badge--status" :class="`badge--${group.status}`">
-              {{ group.status }}
-            </span>
-          </p>
-          <p class="card-sub">
-            {{ group.members.length }} photos ·
-            {{ formatBytes(group.reclaimable_bytes) }} reclaimable
-          </p>
-        </div>
-        <div class="card-actions">
+      <DuplicateGroupCard v-for="group in store.groups" :key="group.id" :group="group">
+        <template #actions>
           <template v-if="group.status === 'pending'">
             <button type="button" class="btn btn--primary" @click="store.startReview(group.id)">
               Review
@@ -114,8 +89,17 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
           >
             Reopen
           </button>
-        </div>
-      </article>
+        </template>
+      </DuplicateGroupCard>
+
+      <LoadMore
+        :shown="store.groups.length"
+        :total="store.total"
+        :has-more="store.hasMore"
+        :busy="store.loadingMore"
+        noun="groups"
+        @more="store.loadMore()"
+      />
     </div>
   </div>
 </template>
@@ -238,83 +222,4 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
   gap: 10px;
 }
 
-.card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
-}
-
-.thumbs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.thumbs img {
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
-  border-radius: 5px;
-}
-
-.more {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  padding: 0 4px;
-}
-
-.card-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-title {
-  margin: 0 0 4px;
-  display: flex;
-  gap: 6px;
-}
-
-.badge {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-.badge--exact {
-  background: color-mix(in oklab, var(--danger) 15%, transparent);
-  color: var(--danger);
-}
-
-.badge--similar {
-  background: var(--sel-chip-bg);
-  color: var(--sel-chip-fg);
-}
-
-.badge--status {
-  background: var(--chip);
-  color: var(--sub);
-  text-transform: capitalize;
-}
-
-.badge--reviewed {
-  color: var(--success);
-}
-
-.card-sub {
-  margin: 0;
-  font-size: 12px;
-  color: var(--sub);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
 </style>

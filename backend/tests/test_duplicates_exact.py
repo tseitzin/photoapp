@@ -270,3 +270,60 @@ def test_kind_and_status_filters_paginate(client: TestClient, tmp_path: Path) ->
     ).json()
     assert len(rest["items"]) == 1
     assert client.get("/api/duplicates/groups", params={"kind": "similar"}).json()["total"] == 0
+
+
+def test_the_group_list_filters_by_status(client: TestClient, tmp_path: Path) -> None:
+    """Each review state is reachable on its own.
+
+    The Duplicates page shows only what is still pending and the reviewed and
+    dismissed pages show the rest, so a group must appear under exactly one
+    status and the totals must reflect the filter, not the whole table.
+    """
+    for name in ("a", "b", "c"):
+        _make_dupes(tmp_path, copies=2, name=name)
+    _index(client, tmp_path)
+    groups = client.get("/api/duplicates/groups").json()["items"]
+    assert len(groups) == 3
+
+    reviewed, dismissed, _untouched = groups
+    keep_every_member = [
+        {"photo_id": member["photo"]["id"], "decision": "keep"} for member in reviewed["members"]
+    ]
+    client.post(
+        f"/api/duplicates/groups/{reviewed['id']}/decisions",
+        json={"decisions": keep_every_member},
+    )
+    client.post(f"/api/duplicates/groups/{dismissed['id']}/dismiss", json={})
+
+    def ids_with(status: str) -> tuple[list[int], int]:
+        page = client.get("/api/duplicates/groups", params={"status": status}).json()
+        return [group["id"] for group in page["items"]], page["total"]
+
+    assert ids_with("reviewed") == ([reviewed["id"]], 1)
+    assert ids_with("dismissed") == ([dismissed["id"]], 1)
+    pending_ids, pending_total = ids_with("pending")
+    assert pending_total == 1
+    assert reviewed["id"] not in pending_ids
+    assert dismissed["id"] not in pending_ids
+    # Unfiltered still sees everything, so nothing has been lost.
+    assert client.get("/api/duplicates/groups").json()["total"] == 3
+
+
+def test_paging_by_offset_returns_each_group_once(client: TestClient, tmp_path: Path) -> None:
+    """"Load more" walks the list by offset, so the order must be stable and
+    the pages must not overlap or skip."""
+    for name in ("a", "b", "c", "d", "e"):
+        _make_dupes(tmp_path, copies=2, name=name)
+    _index(client, tmp_path)
+
+    seen: list[int] = []
+    for offset in (0, 2, 4):
+        page = client.get(
+            "/api/duplicates/groups", params={"status": "pending", "limit": 2, "offset": offset}
+        ).json()
+        assert page["total"] == 5
+        seen.extend(group["id"] for group in page["items"])
+
+    assert len(seen) == 5
+    assert len(set(seen)) == 5
+    assert seen == sorted(seen)
