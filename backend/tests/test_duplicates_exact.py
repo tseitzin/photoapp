@@ -310,7 +310,7 @@ def test_the_group_list_filters_by_status(client: TestClient, tmp_path: Path) ->
 
 
 def test_paging_by_offset_returns_each_group_once(client: TestClient, tmp_path: Path) -> None:
-    """"Load more" walks the list by offset, so the order must be stable and
+    """ "Load more" walks the list by offset, so the order must be stable and
     the pages must not overlap or skip."""
     for name in ("a", "b", "c", "d", "e"):
         _make_dupes(tmp_path, copies=2, name=name)
