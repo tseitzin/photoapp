@@ -1,42 +1,70 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import type { DuplicateKind } from '@/api/duplicates'
+import { computed, watch } from 'vue'
+import type { DuplicateKind, GroupStatus } from '@/api/duplicates'
 import LoadMore from '@/components/common/LoadMore.vue'
 import DuplicateCompare from '@/components/duplicates/DuplicateCompare.vue'
 import DuplicateGroupCard from '@/components/duplicates/DuplicateGroupCard.vue'
 import { useDuplicatesStore } from '@/stores/duplicates'
-import { formatBytes, formatCount } from '@/utils/format'
+import { formatCount } from '@/utils/format'
+
+/**
+ * The record of duplicate groups already dealt with, kept off the Duplicates
+ * queue so that page only shows work still to do.
+ *
+ * One component serves both states because they differ only in which status
+ * they list — but they stay separate pages, because "I decided which to keep"
+ * and "these were never duplicates" are different answers worth looking at
+ * separately.
+ */
+const props = defineProps<{ status: Extract<GroupStatus, 'reviewed' | 'dismissed'> }>()
 
 const store = useDuplicatesStore()
 
-// Only what still needs a decision. Groups already reviewed or dismissed live
-// on their own pages, so this queue empties as it is worked through.
-onMounted(() => void store.setStatusFilter('pending'))
+const COPY = {
+  reviewed: {
+    title: 'Reviewed',
+    lead: 'Groups you have already decided on.',
+    empty: 'Nothing reviewed yet',
+    emptyHint: 'Groups you decide on in the Duplicates queue are kept here.',
+    sibling: { to: '/duplicates/dismissed', label: 'Not duplicates' },
+  },
+  dismissed: {
+    title: 'Not duplicates',
+    lead: 'Groups you said were not duplicates of each other.',
+    empty: 'Nothing marked as “not duplicates”',
+    emptyHint: 'Use “Not duplicates” on a group in the Duplicates queue.',
+    sibling: { to: '/duplicates/reviewed', label: 'Reviewed' },
+  },
+} as const
 
-const reviewedCount = computed(() => store.summary?.reviewed_groups ?? 0)
-const dismissedCount = computed(() => store.summary?.dismissed_groups ?? 0)
-/** Distinguishes "nothing to review" from "no duplicates at all". */
-const hasDecidedSome = computed(() => reviewedCount.value + dismissedCount.value > 0)
+const copy = computed(() => COPY[props.status])
+const siblingCount = computed(() =>
+  props.status === 'reviewed'
+    ? (store.summary?.dismissed_groups ?? 0)
+    : (store.summary?.reviewed_groups ?? 0),
+)
 
 const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'exact', label: 'Exact' },
   { value: 'similar', label: 'Similar' },
 ]
+
+// Watch rather than onMounted: the router reuses this component when moving
+// between the two pages, so mount does not fire again.
+watch(() => props.status, (status) => void store.setStatusFilter(status), { immediate: true })
 </script>
 
 <template>
   <DuplicateCompare v-if="store.reviewing" />
 
-  <div v-else class="duplicates">
+  <div v-else class="reviewed">
     <header class="head">
-      <div>
-        <h1 class="title">Duplicates</h1>
-        <p v-if="store.summary" class="sub">
-          {{ formatCount(store.summary.pending_groups) }} groups to review ·
-          {{ formatCount(store.summary.marked_remove_count) }} photos marked ·
-          {{ formatBytes(store.summary.marked_remove_bytes) }} to reclaim ·
-          <RouterLink to="/quarantine" class="link">apply removals →</RouterLink>
+      <div class="heading">
+        <RouterLink to="/duplicates" class="back">← Back to duplicates</RouterLink>
+        <h1 class="title">{{ copy.title }}</h1>
+        <p class="sub">
+          {{ formatCount(store.total) }} groups · {{ copy.lead }}
         </p>
       </div>
       <div class="segmented" role="group" aria-label="Kind">
@@ -51,57 +79,28 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
           {{ option.label }}
         </button>
       </div>
-      <button
-        type="button"
-        class="btn btn--primary"
-        :disabled="!store.groups.length"
-        @click="store.startReview()"
-      >
-        Review all
-      </button>
     </header>
 
     <p v-if="store.error" class="error" role="alert">{{ store.error }}</p>
-    <p v-if="store.loading" class="muted">Loading duplicate groups…</p>
+    <p v-if="store.loading" class="muted">Loading groups…</p>
 
     <p v-else-if="!store.groups.length" class="empty">
-      <template v-if="hasDecidedSome">
-        <span class="empty-title">Nothing left to review</span>
-        Every duplicate group has been dealt with. The ones you decided on are kept below.
-      </template>
-      <template v-else>
-        <span class="empty-title">No duplicates found</span>
-        Run a scan and check back — exact copies and visually similar photos will show up here.
-      </template>
+      <span class="empty-title">{{ copy.empty }}</span>
+      {{ copy.emptyHint }}
     </p>
 
     <div v-else class="list">
       <DuplicateGroupCard v-for="group in store.groups" :key="group.id" :group="group">
         <template #actions>
-          <template v-if="group.status === 'pending'">
-            <button type="button" class="btn btn--primary" @click="store.startReview(group.id)">
-              Review
-            </button>
-            <button type="button" class="btn" @click="store.dismiss(group.id)">
-              Not duplicates
-            </button>
-          </template>
           <button
-            v-else-if="group.status === 'reviewed'"
+            v-if="group.status === 'reviewed'"
             type="button"
             class="btn btn--primary"
             @click="store.reopen(group.id, true)"
           >
             Review again
           </button>
-          <button
-            v-else-if="group.status === 'dismissed'"
-            type="button"
-            class="btn"
-            @click="store.reopen(group.id)"
-          >
-            Reopen
-          </button>
+          <button type="button" class="btn" @click="store.reopen(group.id)">Reopen</button>
         </template>
       </DuplicateGroupCard>
 
@@ -115,19 +114,16 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
       />
     </div>
 
-    <p class="reviewed-links">
-      <RouterLink to="/duplicates/reviewed" class="link">
-        Reviewed ({{ formatCount(reviewedCount) }}) →
-      </RouterLink>
-      <RouterLink to="/duplicates/dismissed" class="link">
-        Not duplicates ({{ formatCount(dismissedCount) }}) →
+    <p class="cross-links">
+      <RouterLink :to="copy.sibling.to" class="link">
+        {{ copy.sibling.label }} ({{ formatCount(siblingCount) }}) →
       </RouterLink>
     </p>
   </div>
 </template>
 
 <style scoped>
-.duplicates {
+.reviewed {
   max-width: 980px;
   width: 100%;
   margin: 0 auto;
@@ -136,13 +132,25 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
 
 .head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
   margin-bottom: 20px;
 }
 
-.head > div:first-child {
+.heading {
   flex: 1;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--sub);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--fg);
 }
 
 .title {
@@ -208,11 +216,6 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
   font-weight: 600;
 }
 
-.btn--primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .error {
   padding: 9px 12px;
   border-radius: 8px;
@@ -244,13 +247,10 @@ const KIND_OPTIONS: { value: DuplicateKind | 'all'; label: string }[] = [
   gap: 10px;
 }
 
-.reviewed-links {
+.cross-links {
   margin: 22px 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--divider);
-  display: flex;
-  gap: 20px;
   font-size: 12.5px;
 }
-
 </style>

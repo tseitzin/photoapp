@@ -11,6 +11,21 @@ const router = createRouter({
       name: 'duplicates',
       component: () => import('@/views/DuplicatesView.vue'),
     },
+    // Two review-history pages off /duplicates, sharing one view: they differ
+    // only by the status they list. Not in the top bar — reached from the
+    // Duplicates page, which keeps the queue and the record separate.
+    {
+      path: '/duplicates/reviewed',
+      name: 'duplicates-reviewed',
+      component: () => import('@/views/ReviewedGroupsView.vue'),
+      props: { status: 'reviewed' },
+    },
+    {
+      path: '/duplicates/dismissed',
+      name: 'duplicates-dismissed',
+      component: () => import('@/views/ReviewedGroupsView.vue'),
+      props: { status: 'dismissed' },
+    },
     { path: '/organize', name: 'organize', component: () => import('@/views/OrganizeView.vue') },
     { path: '/scan', name: 'scan', component: () => import('@/views/ScanView.vue') },
     {
