@@ -8,6 +8,8 @@ from app.db.session import get_db, get_session_factory
 from app.files.organize import OrganizePlan, OrganizeSpec, PlannedMove
 from app.jobs.runner import JobRunner, get_job_runner
 from app.schemas.organize import (
+    LibraryLayout,
+    LibraryLocation,
     OrganizePreviewRead,
     OrganizeRequest,
     OrganizeRunRead,
@@ -82,6 +84,17 @@ def list_organize_runs(
     service: Service, limit: Annotated[int, Query(ge=1, le=100)] = 5
 ) -> list[OrganizeRunRead]:
     return [OrganizeRunRead.model_validate(run) for run in service.list_recent(limit)]
+
+
+# Declared before /{run_id}: FastAPI matches in order, and "layout" would
+# otherwise be parsed as a run id and 422.
+@router.get("/layout")
+def get_library_layout(service: Service) -> LibraryLayout:
+    locations = service.library_layout()
+    return LibraryLayout(
+        locations=[LibraryLocation(path=path, photos=photos) for path, photos in locations],
+        total=sum(photos for _, photos in locations),
+    )
 
 
 @router.get("/{run_id}")

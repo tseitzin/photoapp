@@ -2,8 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { ORGANIZE_PREFS_KEY, useOrganizeStore } from '../organize'
 import { useLibraryStore } from '../library'
-import { getOrganizeRun, listOrganizeRuns, previewOrganize, startOrganize } from '@/api/organize'
-import type { OrganizePreview, OrganizeRun } from '@/api/organize'
+import {
+  getLibraryLayout,
+  getOrganizeRun,
+  listOrganizeRuns,
+  previewOrganize,
+  startOrganize,
+} from '@/api/organize'
+import type { LibraryLayout, OrganizePreview, OrganizeRun } from '@/api/organize'
 import type { FolderNode } from '@/api/folders'
 
 vi.mock('@/api/organize', () => ({
@@ -11,6 +17,9 @@ vi.mock('@/api/organize', () => ({
   startOrganize: vi.fn<() => Promise<OrganizeRun>>(),
   getOrganizeRun: vi.fn<() => Promise<OrganizeRun>>(),
   listOrganizeRuns: vi.fn<() => Promise<OrganizeRun[]>>().mockResolvedValue([]),
+  getLibraryLayout: vi
+    .fn<() => Promise<LibraryLayout>>()
+    .mockResolvedValue({ locations: [], total: 0 }),
   TERMINAL_ORGANIZE_STATUSES: ['completed', 'failed'],
 }))
 vi.mock('@/api/photos', () => ({
@@ -33,6 +42,7 @@ const previewMock = vi.mocked(previewOrganize)
 const startMock = vi.mocked(startOrganize)
 const getRunMock = vi.mocked(getOrganizeRun)
 const listRunsMock = vi.mocked(listOrganizeRuns)
+const layoutMock = vi.mocked(getLibraryLayout)
 
 function folder(path: string, overrides: Partial<FolderNode> = {}): FolderNode {
   const name = path.split('/').pop() ?? path
@@ -112,6 +122,8 @@ describe('organize store', () => {
     getRunMock.mockReset()
     listRunsMock.mockReset()
     listRunsMock.mockResolvedValue([])
+    layoutMock.mockReset()
+    layoutMock.mockResolvedValue({ locations: [], total: 0 })
   })
 
   afterEach(() => {
@@ -263,6 +275,87 @@ describe('organize store', () => {
     await store.load()
 
     expect(store.destination).toBe('/lib/Organized')
+  })
+
+  it('warns when the destination is not where the library already lives', async () => {
+    // The real misfire: photos already organized under one folder, a run sent
+    // to another, and nothing said so until you browsed the tree afterwards.
+    layoutMock.mockResolvedValue({
+      locations: [{ path: '/lib/Camera Roll/Organized', photos: 4949 }],
+      total: 4949,
+    })
+    const store = useOrganizeStore()
+    await store.load()
+
+    store.destination = '/lib/Updated'
+
+    expect(store.wouldSplitLibrary).toBe(true)
+    expect(store.dominantLocation?.photos).toBe(4949)
+  })
+
+  it('does not warn when organizing into the place the library already is', async () => {
+    layoutMock.mockResolvedValue({
+      locations: [{ path: '/lib/Photos', photos: 5938 }],
+      total: 5938,
+    })
+    const store = useOrganizeStore()
+    await store.load()
+
+    store.destination = '/lib/Photos'
+
+    expect(store.wouldSplitLibrary).toBe(false)
+  })
+
+  it('ignores a trailing slash rather than crying split over it', async () => {
+    layoutMock.mockResolvedValue({
+      locations: [{ path: '/lib/Photos', photos: 10 }],
+      total: 10,
+    })
+    const store = useOrganizeStore()
+    await store.load()
+
+    store.destination = '/lib/Photos/'
+
+    expect(store.wouldSplitLibrary).toBe(false)
+  })
+
+  it('does not warn when the library is empty', async () => {
+    const store = useOrganizeStore()
+    await store.load()
+
+    store.destination = '/lib/anywhere'
+
+    expect(store.wouldSplitLibrary).toBe(false)
+  })
+
+  it('offers to point the destination at the existing location', async () => {
+    layoutMock.mockResolvedValue({
+      locations: [
+        { path: '/lib/Camera Roll/Organized', photos: 4949 },
+        { path: '/lib/Updated', photos: 984 },
+      ],
+      total: 5933,
+    })
+    const store = useOrganizeStore()
+    await store.load()
+    store.destination = '/lib/Elsewhere'
+
+    store.useDominantLocation()
+
+    expect(store.destination).toBe('/lib/Camera Roll/Organized')
+    expect(store.wouldSplitLibrary).toBe(false)
+  })
+
+  it('a first-run destination defaults to where the library already lives', async () => {
+    layoutMock.mockResolvedValue({
+      locations: [{ path: '/lib/Photos', photos: 5938 }],
+      total: 5938,
+    })
+    const store = useOrganizeStore()
+
+    await store.load()
+
+    expect(store.destination).toBe('/lib/Photos')
   })
 
   it('removing a working-set folder unchecks its whole subtree in the library', () => {

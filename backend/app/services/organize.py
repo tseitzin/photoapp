@@ -1,6 +1,8 @@
 """Organize run orchestration: validate, queue the job, poll its state."""
 
 import logging
+import re
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -9,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.files.organize import (
+    UNDATED_DIR,
     OrganizePlan,
     OrganizeSpec,
     SessionFactory,
@@ -21,12 +24,17 @@ from app.jobs.runner import JobRunner
 from app.models import OrganizeRun
 from app.models.organize import ACTIVE_ORGANIZE_STATUSES
 from app.repositories.organize import OrganizeRunRepository
+from app.repositories.photos import PhotoRepository
 from app.repositories.scan_roots import ScanRootRepository
 from app.repositories.scans import ScanRepository
 from app.services.errors import ConflictError, NotFoundError
 from app.services.scan_roots import ScanRootService
 
 logger = logging.getLogger(__name__)
+
+# The trailing part of a path that date mode generates. Stripping it turns
+# ".../Photos/2019/07" back into the destination the user actually chose.
+_DATE_BUCKET = re.compile(rf"/(\d{{4}}/\d{{2}}|{re.escape(UNDATED_DIR)})$")
 
 
 class OrganizeService:
@@ -43,6 +51,20 @@ class OrganizeService:
 
     def preview(self, spec: OrganizeSpec) -> OrganizePlan:
         return build_plan(self._session, spec)
+
+    def library_layout(self) -> list[tuple[str, int]]:
+        """Where the library lives today, biggest location first.
+
+        A date tree is reported by the destination it was organized into, not
+        by each of its year/month folders — otherwise one library looks like a
+        hundred locations. Folders that are not date buckets report themselves,
+        which is how loose photos show up.
+        """
+        totals: Counter[str] = Counter()
+        for directory, count in PhotoRepository(self._session).active_directory_counts():
+            totals[_DATE_BUCKET.sub("", directory)] += count
+        # Biggest first, then by path so equal counts are stable to read.
+        return sorted(totals.items(), key=lambda entry: (-entry[1], entry[0]))
 
     def start(self, spec: OrganizeSpec) -> OrganizeRun:
         validate_spec(self._session, spec)  # bad requests 422 here, not as a failed run

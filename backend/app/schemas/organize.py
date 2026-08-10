@@ -20,6 +20,19 @@ class RenameExample(BaseModel):
     new: str
 
 
+class LibraryLocation(BaseModel):
+    path: str
+    photos: int
+
+
+class LibraryLayout(BaseModel):
+    """Where organized photos actually live, so a second location is visible
+    before a run creates one rather than after."""
+
+    locations: list[LibraryLocation]
+    total: int
+
+
 class OrganizePreviewRead(BaseModel):
     total: int
     planned: int

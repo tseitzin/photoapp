@@ -34,6 +34,18 @@ export interface OrganizePreview {
   destination_inside_source: boolean
 }
 
+/** One place the library currently lives. A date tree reports the destination
+ *  it was organized into, not each of its year/month folders. */
+export interface LibraryLocation {
+  path: string
+  photos: number
+}
+
+export interface LibraryLayout {
+  locations: LibraryLocation[]
+  total: number
+}
+
 export interface OrganizeRun {
   id: number
   status: OrganizeStatus
@@ -57,6 +69,10 @@ export const TERMINAL_ORGANIZE_STATUSES: OrganizeStatus[] = ['completed', 'faile
 
 export function previewOrganize(req: OrganizeRequest): Promise<OrganizePreview> {
   return requestJson<OrganizePreview>('/api/organize/preview', 'POST', req)
+}
+
+export function getLibraryLayout(): Promise<LibraryLayout> {
+  return request<LibraryLayout>('/api/organize/layout')
 }
 
 export function startOrganize(req: OrganizeRequest): Promise<OrganizeRun> {

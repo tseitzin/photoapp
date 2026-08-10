@@ -1,11 +1,13 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  getLibraryLayout,
   getOrganizeRun,
   listOrganizeRuns,
   previewOrganize,
   startOrganize,
   TERMINAL_ORGANIZE_STATUSES,
+  type LibraryLocation,
   type OrganizeMode,
   type OrganizePreview,
   type OrganizeRequest,
@@ -63,6 +65,24 @@ export const useOrganizeStore = defineStore('organize', () => {
   const activeRun = ref<OrganizeRun | null>(null)
   const phase = ref<OrganizePhase>('setup')
   const pickerOpen = ref(false)
+  /** Where the library lives today, biggest location first. */
+  const locations = ref<LibraryLocation[]>([])
+
+  /** The place most of the library already sits, if there is one. */
+  const dominantLocation = computed<LibraryLocation | null>(() => locations.value[0] ?? null)
+
+  /**
+   * True when organizing into the chosen destination would leave the library
+   * in more than one place.
+   *
+   * Nothing compared these before, which is how a library ended up as the same
+   * date structure in two locations — invisible until you went looking.
+   */
+  const wouldSplitLibrary = computed(() => {
+    const dominant = dominantLocation.value
+    if (!dominant || !destination.value) return false
+    return destination.value.replace(/\/+$/, '') !== dominant.path.replace(/\/+$/, '')
+  })
 
   let pollTimer: ReturnType<typeof setInterval> | undefined
   let previewTimer: ReturnType<typeof setTimeout> | undefined
@@ -102,7 +122,10 @@ export const useOrganizeStore = defineStore('organize', () => {
     error.value = null
     try {
       if (library.folders.length === 0) await library.loadFolders()
-      if (!destination.value) destination.value = defaultDestination()
+      await refreshLayout()
+      // Prefer where the library already is over a guess — picking anywhere
+      // else is what splits it in two.
+      if (!destination.value) destination.value = dominantLocation.value?.path ?? defaultDestination()
       // Resume watching a run that is already going (e.g. after navigation).
       const [latest] = await listOrganizeRuns(1)
       if (latest && !TERMINAL_ORGANIZE_STATUSES.includes(latest.status)) {
@@ -114,6 +137,20 @@ export const useOrganizeStore = defineStore('organize', () => {
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
     }
+  }
+
+  async function refreshLayout(): Promise<void> {
+    try {
+      locations.value = (await getLibraryLayout()).locations
+    } catch {
+      // Advisory only: a missing layout must not block organizing.
+      locations.value = []
+    }
+  }
+
+  /** Point the destination at where the library already lives. */
+  function useDominantLocation(): void {
+    if (dominantLocation.value) destination.value = dominantLocation.value.path
   }
 
   function schedulePreview(): void {
@@ -196,10 +233,12 @@ export const useOrganizeStore = defineStore('organize', () => {
         if (run.status === 'completed') {
           phase.value = 'done'
           preview.value = null
-          // Paths changed on disk: the folder tree and the grid are both stale.
+          // Paths changed on disk: the folder tree, the grid and where the
+          // library lives are all stale.
           await Promise.all([
             library.loadFolders().catch(() => {}),
             library.reload().catch(() => {}),
+            refreshLayout(),
           ])
         } else {
           phase.value = 'setup'
@@ -244,10 +283,15 @@ export const useOrganizeStore = defineStore('organize', () => {
     activeRun,
     phase,
     pickerOpen,
+    locations,
+    dominantLocation,
+    wouldSplitLibrary,
     workingSet,
     workingTotals,
     progressPct,
     load,
+    refreshLayout,
+    useDominantLocation,
     apply,
     removeFolder,
     discard,

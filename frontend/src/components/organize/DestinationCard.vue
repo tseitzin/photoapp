@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { OrganizeMode } from '@/api/organize'
 import { useOrganizeStore } from '@/stores/organize'
+import { formatCount } from '@/utils/format'
 
 const store = useOrganizeStore()
 
@@ -43,6 +44,16 @@ const help = computed(() => HELP[store.mode])
       </button>
     </div>
     <p class="help">{{ help }}</p>
+    <p v-if="store.wouldSplitLibrary && store.dominantLocation" class="split-note">
+      <span>
+        {{ formatCount(store.dominantLocation.photos) }} of your photos are already organized
+        under <code>{{ store.dominantLocation.path }}</code>. Organizing into a different folder
+        will leave your library in more than one place.
+      </span>
+      <button type="button" class="split-fix" @click="store.useDominantLocation()">
+        Use that folder
+      </button>
+    </p>
     <p v-if="store.preview?.destination_inside_source" class="inside-source-note">
       This destination is inside a folder you’re organizing — the photos would move into a
       subfolder of themselves. Pick a folder outside the working set unless that’s intended.
@@ -164,5 +175,37 @@ const help = computed(() => HELP[store.mode])
   color: var(--danger);
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* A warning, not a refusal — a second location is occasionally deliberate. */
+.split-note {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--chip);
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.split-note code {
+  font-family: var(--font-mono);
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.split-fix {
+  flex-shrink: 0;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
 }
 </style>

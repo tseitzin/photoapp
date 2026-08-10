@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DestinationCard from '@/components/organize/DestinationCard.vue'
+import LibraryLayoutCard from '@/components/organize/LibraryLayoutCard.vue'
 import DestinationPickerModal from '@/components/organize/DestinationPickerModal.vue'
 import PreviewPanel from '@/components/organize/PreviewPanel.vue'
 import ToggleCard from '@/components/organize/ToggleCard.vue'
@@ -47,6 +48,8 @@ function discard(): void {
           </p>
 
           <template v-if="store.workingSet.length > 0">
+            <LibraryLayoutCard />
+
             <DestinationCard />
 
             <ToggleCard

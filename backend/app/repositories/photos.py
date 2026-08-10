@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, cast, func, or_, select, update
+from sqlalchemy import ColumnElement, Row, and_, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import BIT
 from sqlalchemy.orm import Session, defer
 
@@ -151,6 +151,19 @@ class PhotoRepository:
         return set(
             self._session.scalars(select(Photo.path).where(Photo.path.like(f"{normalized}/%")))
         )
+
+    def active_directory_counts(self) -> Sequence[Row[tuple[str, int]]]:
+        """Active photos per containing directory.
+
+        Index-only over (status, directory): the generated column means no heap
+        access and no per-row string work, and the caller gets one row per
+        distinct directory rather than one per photo.
+        """
+        return self._session.execute(
+            select(Photo.directory, func.count())
+            .where(Photo.status == "active")
+            .group_by(Photo.directory)
+        ).all()
 
     def gps_backfill_candidates(self, after_id: int, limit: int) -> Sequence[Photo]:
         """Active photos the location backfill can still improve.
