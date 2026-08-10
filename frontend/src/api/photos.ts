@@ -53,6 +53,14 @@ export interface PhotoPage {
   offset: number
 }
 
+/**
+ * The camera facet for photos whose EXIF names no camera — texts, screenshots,
+ * downloads. Blank because a real camera model never is, so it cannot collide
+ * with one. Without it there is no way to select those photos at all, and
+ * ticking every camera returns fewer photos than the library holds.
+ */
+export const NO_CAMERA = ''
+
 export interface FacetValue {
   value: string
   count: number

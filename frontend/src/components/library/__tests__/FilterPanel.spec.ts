@@ -12,6 +12,7 @@ vi.mock('@/api/photos', () => ({
   unmarkPhotos: vi.fn<() => Promise<unknown>>(),
   thumbnailUrl: (id: number) => `/thumb/${id}`,
   previewUrl: (id: number) => `/preview/${id}`,
+  NO_CAMERA: '',
 }))
 vi.mock('@/api/folders', () => ({
   listFolders: vi.fn<() => Promise<never[]>>().mockResolvedValue([]),
@@ -117,5 +118,50 @@ describe('FilterPanel location row', () => {
 
     expect(wrapper.find('.coords').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Location')
+  })
+})
+
+describe('FilterPanel camera list', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  function panelWithCameras(cameras: { value: string; count: number }[]) {
+    const store = useLibraryStore()
+    store.facets = { file_types: [], cameras }
+    return mount(FilterPanel)
+  }
+
+  it('names the blank facet rather than showing an empty row', () => {
+    // Blank is the wire value for "no camera"; an unlabelled checkbox with a
+    // count beside it is how this looked before.
+    const wrapper = panelWithCameras([
+      { value: 'iPhone 11', count: 1947 },
+      { value: '', count: 483 },
+    ])
+
+    const names = wrapper.findAll('.camera-name').map((n) => n.text())
+    expect(names).toEqual(['iPhone 11', 'No camera'])
+  })
+
+  it('sets it apart visually, because it is not a camera', () => {
+    const wrapper = panelWithCameras([{ value: '', count: 483 }])
+
+    expect(wrapper.get('.camera-name').classes()).toContain('camera-name--none')
+  })
+
+  it('leaves real camera names alone', () => {
+    const wrapper = panelWithCameras([{ value: 'NIKON D70', count: 119 }])
+
+    expect(wrapper.get('.camera-name').classes()).not.toContain('camera-name--none')
+  })
+
+  it('ticks and unticks the no-camera facet like any other', async () => {
+    const wrapper = panelWithCameras([{ value: '', count: 483 }])
+    const store = useLibraryStore()
+
+    await wrapper.get('.camera-check').trigger('change')
+
+    expect(store.filters.cameras).toEqual([''])
   })
 })

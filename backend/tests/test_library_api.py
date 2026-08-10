@@ -85,7 +85,10 @@ def test_facets_report_type_and_camera_counts(client: TestClient, tmp_path: Path
     types = {f["value"]: f["count"] for f in facets["file_types"]}
     assert types == {"jpeg": 2, "png": 1}
     cameras = {f["value"]: f["count"] for f in facets["cameras"]}
-    assert cameras == {"A7 IV": 2}
+    # b.jpeg records no camera and gets the blank-valued facet, so the counts
+    # add up to the library and every photo is reachable from this filter.
+    assert cameras == {"A7 IV": 2, "": 1}
+    assert sum(cameras.values()) == 3
 
 
 def test_sort_by_name_and_size(client: TestClient, tmp_path: Path) -> None:

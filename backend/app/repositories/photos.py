@@ -12,6 +12,17 @@ from app.models import DuplicateDecision, Photo
 # doesn't expose it. Only PhotoDetail does, and that goes through get().
 _NO_EXIF = defer(Photo.exif)
 
+# The facet standing for "this photo records no camera". Blank is safe as a
+# wire value because a real camera_model is never blank — _no_camera() folds
+# blanks into this bucket, so nothing can be both a camera name and this.
+NO_CAMERA = ""
+
+
+def _no_camera() -> ColumnElement[bool]:
+    """Photos whose EXIF names no camera: texts, screenshots, downloads."""
+    return or_(Photo.camera_model.is_(None), Photo.camera_model == "")
+
+
 # Facet/filter canonicalization: one chip covers equivalent extensions.
 CANONICAL_EXT = {"jpg": "jpeg", "tif": "tiff", "heif": "heic"}
 _EXPAND_EXT: dict[str, list[str]] = {
@@ -214,7 +225,15 @@ class PhotoRepository:
         if exts:
             conditions.append(Photo.ext.in_([e.lower() for e in exts]))
         if cameras:
-            conditions.append(Photo.camera_model.in_(list(cameras)))
+            # NULL never matches IN, so photos with no camera need their own
+            # clause — without it, ticking every camera still excludes them.
+            named = [camera for camera in cameras if camera != NO_CAMERA]
+            clauses: list[ColumnElement[bool]] = []
+            if named:
+                clauses.append(Photo.camera_model.in_(named))
+            if NO_CAMERA in cameras:
+                clauses.append(_no_camera())
+            conditions.append(or_(*clauses))
         if q:
             conditions.append(Photo.filename.ilike(f"%{q}%"))
 
@@ -269,9 +288,17 @@ class PhotoRepository:
             camera: count
             for camera, count in self._session.execute(
                 select(Photo.camera_model, func.count())
-                .where(visible, Photo.camera_model.is_not(None))
+                .where(visible, ~_no_camera())
                 .group_by(Photo.camera_model)
                 .order_by(func.count().desc())
             )
         }
+        # Last, and only when it applies: without a facet of its own there is
+        # no way to select these at all, so ticking every camera silently
+        # returns fewer photos than the library holds.
+        missing = self._session.scalar(
+            select(func.count()).select_from(Photo).where(visible, _no_camera())
+        )
+        if missing:
+            camera_counts[NO_CAMERA] = missing
         return type_counts, camera_counts

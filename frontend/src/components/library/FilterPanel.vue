@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { thumbnailUrl } from '@/api/photos'
+import { NO_CAMERA, thumbnailUrl } from '@/api/photos'
 import { useLibraryStore } from '@/stores/library'
 import {
   formatBytes,
@@ -75,7 +75,9 @@ const metadataRows = computed(() => {
           :checked="store.filters.cameras.includes(facet.value)"
           @change="store.toggleCamera(facet.value)"
         />
-        <span class="camera-name">{{ facet.value }}</span>
+        <span class="camera-name" :class="{ 'camera-name--none': facet.value === NO_CAMERA }">
+          {{ facet.value === NO_CAMERA ? 'No camera' : facet.value }}
+        </span>
         <span class="camera-count">{{ formatCount(facet.count) }}</span>
       </label>
       <p v-if="!store.facets?.cameras.length" class="muted">No camera metadata</p>
@@ -218,6 +220,12 @@ const metadataRows = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Not a camera name — a catch-all, and it reads as one. */
+.camera-name--none {
+  font-style: italic;
+  color: var(--sub);
 }
 
 .camera-count {
