@@ -63,11 +63,11 @@ def setup_telemetry(app: FastAPI, *, enabled: bool, console_export: bool) -> boo
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
-    from app.core.sampling import ParentedClientSpans
+    from app.core.sampling import SpansWorthKeeping
 
     os.environ.setdefault("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS", _DEFAULT_EXCLUDED_URLS)
 
-    provider = TracerProvider(resource=build_resource(Resource), sampler=ParentedClientSpans())
+    provider = TracerProvider(resource=build_resource(Resource), sampler=SpansWorthKeeping())
     if console_export:
         # Console *instead of* OTLP, so instrumentation can be inspected without
         # sending anything anywhere.

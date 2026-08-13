@@ -565,6 +565,24 @@ insert-only import leaves the visibility map stale and turns index-only scans
 back into heap reads. Migration 0016 lowers the scale factors on `photos`; check
 `last_autovacuum` in the report afterwards to confirm it kept up.
 
+### After a big cleanup, vacuum full
+
+Autovacuum reclaims dead rows but does not shrink the file — the space it frees
+is reused, not returned. A week of heavy duplicate review (26,117 row updates
+from marking, plus quarantine and delete) grew the `photos` heap to 3,706
+bytes/row while the row count *fell*. Dead tuples stayed near zero throughout, so
+autovacuum was doing its job; the table was simply carrying its high-water mark.
+Everything drifted slower as a result — `/api/stats` P50 went 14 ms to 80 ms
+across the week.
+
+```bash
+docker exec aperture-db psql -U aperture -d aperture -c "VACUUM (FULL, ANALYZE) photos;"
+```
+
+Took 0.59s: 33 MB → 13 MB, 1,821 bytes/row, `/api/stats` back to 19.8 ms. It
+takes an exclusive lock, so run it when nothing else is using the app — after a
+big cleanup, not on a schedule.
+
 ## Ports (fixed on this machine)
 
 See [CLAUDE.md](CLAUDE.md) for why these are reserved:

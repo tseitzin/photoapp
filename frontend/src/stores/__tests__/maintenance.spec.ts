@@ -46,9 +46,11 @@ describe('GPS backfill', () => {
     await store.run()
 
     expect(backfillMock).toHaveBeenCalledTimes(3)
-    expect(backfillMock).toHaveBeenNthCalledWith(1, 0, 1000)
-    expect(backfillMock).toHaveBeenNthCalledWith(2, 1000, 1000)
-    expect(backfillMock).toHaveBeenNthCalledWith(3, 2500, 1000)
+    // Third argument is the chunk size — a latency budget, not a batch size, so
+    // it is asserted rather than left free. The cursors come from the mocks.
+    expect(backfillMock).toHaveBeenNthCalledWith(1, 0, 200)
+    expect(backfillMock).toHaveBeenNthCalledWith(2, 1000, 200)
+    expect(backfillMock).toHaveBeenNthCalledWith(3, 2500, 200)
     expect(store.processed).toBe(2400)
     expect(store.updated).toBe(1120)
     expect(store.running).toBe(false)

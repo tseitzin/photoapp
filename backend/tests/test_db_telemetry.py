@@ -22,7 +22,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.core import telemetry
-from app.core.sampling import ParentedClientSpans
+from app.core.sampling import SpansWorthKeeping
 from app.core.telemetry import span
 from app.models.photo import Photo
 
@@ -37,7 +37,7 @@ def traced_engine(db_engine: Engine) -> Iterator[InMemorySpanExporter]:
     saved_provider = trace._TRACER_PROVIDER  # noqa: SLF001
     exporter = InMemorySpanExporter()
     provider = TracerProvider(
-        resource=telemetry.build_resource(Resource), sampler=ParentedClientSpans()
+        resource=telemetry.build_resource(Resource), sampler=SpansWorthKeeping()
     )
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace._TRACER_PROVIDER = provider  # noqa: SLF001
@@ -158,7 +158,7 @@ def test_setup_is_reversible_so_a_second_start_does_not_double_count(
     saved_provider = trace._TRACER_PROVIDER  # noqa: SLF001
     exporter = InMemorySpanExporter()
     provider = TracerProvider(
-        resource=telemetry.build_resource(Resource), sampler=ParentedClientSpans()
+        resource=telemetry.build_resource(Resource), sampler=SpansWorthKeeping()
     )
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace._TRACER_PROVIDER = provider  # noqa: SLF001
@@ -178,3 +178,66 @@ def test_setup_is_reversible_so_a_second_start_does_not_double_count(
         trace._TRACER_PROVIDER = saved_provider  # noqa: SLF001
 
     assert len(queries) == 1
+
+
+def test_a_cors_preflight_produces_no_spans_at_all(
+    traced_engine: InMemorySpanExporter,
+) -> None:
+    """The browser sends OPTIONS before most mutations because the frontend is a
+    separate origin. They do no work and answer no question — a week of ordinary
+    use put ~2,700 of them in the dataset, about 9% of everything sent.
+
+    'No spans at all' is the assertion that matters: dropping the server span
+    alone would leave its ASGI `http send` child behind as a rootless fragment.
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    app = FastAPI()
+
+    @app.get("/api/photos/{photo_id}")
+    def photo(photo_id: int) -> dict[str, int]:
+        return {"id": photo_id}
+
+    FastAPIInstrumentor.instrument_app(app)
+    try:
+        with TestClient(app) as client:
+            client.options(
+                "/api/photos/1",
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+    finally:
+        FastAPIInstrumentor.uninstrument_app(app)
+
+    assert traced_engine.get_finished_spans() == ()
+
+
+def test_a_real_request_is_still_recorded_in_full(
+    traced_engine: InMemorySpanExporter,
+) -> None:
+    """The preflight rule must key on the method, not on the route — the same
+    path serves a GET that is very much worth recording."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    app = FastAPI()
+
+    @app.get("/api/photos/{photo_id}")
+    def photo(photo_id: int) -> dict[str, int]:
+        return {"id": photo_id}
+
+    FastAPIInstrumentor.instrument_app(app)
+    try:
+        with TestClient(app) as client:
+            client.get("/api/photos/1")
+    finally:
+        FastAPIInstrumentor.uninstrument_app(app)
+
+    kinds = [s.kind for s in traced_engine.get_finished_spans()]
+
+    assert SpanKind.SERVER in kinds

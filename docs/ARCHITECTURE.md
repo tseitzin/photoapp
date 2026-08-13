@@ -390,12 +390,25 @@ convention:
 The resource deliberately omits the process and OS detectors, which would attach
 the hostname and command line.
 
-**Sampling.** `/health`, `/thumbnail` and `/preview` are excluded from HTTP
-tracing because one photo grid requests hundreds of thumbnails. Those requests
-still query the database, so `ParentedClientSpans` drops client spans that have
-no parent — otherwise each excluded request would emit a *rootless* `SELECT`
-span and the exclusion would backfire into more volume than it saved. Server and
-internal spans are unaffected, so a background scan still opens its own trace.
+**Sampling.** `core/sampling.py::SpansWorthKeeping` applies three rules, each one
+earned by something that actually polluted the data:
+
+- **A dropped span's children go with it.** The SDK still makes a refused span
+  current as a non-recording parent, so children are sampled independently and
+  would otherwise outlive it — arriving as rootless fragments of a trace that was
+  deliberately discarded.
+- **CORS preflights are dropped.** The frontend is a separate origin, so the
+  browser sends an `OPTIONS` before most mutations. They touch no database and do
+  no work, yet each produced a server span plus an ASGI `http send` child.
+  Measured over a week of ordinary use: ~2,700 spans, about 9% of everything
+  sent, none of it able to answer a question.
+- **Client spans need a traced parent.** `/health`, `/thumbnail` and `/preview`
+  are excluded from HTTP tracing because one photo grid requests hundreds of
+  thumbnails. Those requests still query the database, and a rootless `SELECT`
+  per excluded request would turn the exclusion into more volume than it saved.
+
+Server and internal spans are otherwise unaffected, so a background scan still
+opens its own trace.
 
 Consequence worth knowing: two queries differing only by a bound value share one
 `db.statement`, so Honeycomb groups them into a single row. In `/api/stats` the

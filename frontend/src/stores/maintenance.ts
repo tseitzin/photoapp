@@ -3,7 +3,13 @@ import { defineStore } from 'pinia'
 import { backfillGps } from '@/api/maintenance'
 import { useLibraryStore } from '@/stores/library'
 
-const CHUNK = 1000
+/**
+ * Photos per request. Each one costs an EXIF header read from wherever the
+ * library lives, so this is a latency budget rather than a batch size: 1,000
+ * measured 13.4s in a single request, which froze this progress bar for that
+ * long and made Stop feel broken. 200 keeps a chunk near a couple of seconds.
+ */
+const CHUNK = 200
 
 /**
  * The GPS backfill: give coordinates to photos indexed before the scanner
