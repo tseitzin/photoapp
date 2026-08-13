@@ -184,15 +184,7 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
                         "scan %s changed nothing; keeping existing duplicate groups", scan_id
                     )
                 scans.mark_finished(scan, "completed")
-                add_attributes(
-                    scan_span,
-                    files_found=scan.files_found,
-                    files_added=scan.files_added,
-                    files_changed=scan.files_changed,
-                    files_missing=scan.files_missing,
-                    files_moved=scan.files_moved,
-                    errors=scan.error_count,
-                )
+                _record_progress(scan_span, scan)
                 logger.info(
                     "scan %s completed: %s found, %s added, %s errors",
                     scan_id,
@@ -204,6 +196,13 @@ def execute_scan(scan_id: int, session_factory: SessionFactory) -> None:
                 logger.exception("scan %s failed", scan_id)
                 session.rollback()
                 scans.mark_finished(scan, "failed", message=f"{type(exc).__name__}: {exc}")
+                # Counts go on the span even here — especially here. A crash
+                # after indexing 11,500 files and one after indexing none are
+                # very different problems, and a span that reports zeros for
+                # both makes the trace useless exactly when it is needed. The
+                # numbers survive the rollback: they are read off the in-memory
+                # Scan row, which mark_finished has already committed.
+                _record_progress(scan_span, scan)
                 record_failure(scan_span, exc)
 
 
@@ -255,6 +254,19 @@ def _refresh_duplicate_groups(
 
     add_attributes(scan_span, dedupe_pass="bounded", dedupe_touched=len(touched_ids))
     rebuild_groups_for(session, touched_ids)
+
+
+def _record_progress(scan_span: Span, scan: Scan) -> None:
+    """Put how far the scan got on its span, whether or not it finished."""
+    add_attributes(
+        scan_span,
+        files_found=scan.files_found,
+        files_added=scan.files_added,
+        files_changed=scan.files_changed,
+        files_missing=scan.files_missing,
+        files_moved=scan.files_moved,
+        errors=scan.error_count,
+    )
 
 
 def _changed_anything(scan: Scan) -> bool:

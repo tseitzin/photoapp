@@ -232,3 +232,48 @@ def test_unreadable_file_is_recorded_as_error_and_scan_continues(
     assert scan["files_added"] == 1
     photos = db_session.scalars(select(Photo)).all()
     assert [p.filename for p in photos] == ["open.jpg"]
+
+
+def test_a_failed_scan_still_reports_how_far_it_got(monkeypatch, tmp_path, client) -> None:  # type: ignore[no-untyped-def]
+    """A crash after indexing thousands of files and one that indexed none are
+    very different problems. The span must be able to tell them apart.
+
+    A real import died on the last INSERT batch having already added 11,500
+    photos, and its span reported zeros for everything — the counters were only
+    written on the success path.
+    """
+    from opentelemetry import trace
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from app.core import telemetry
+    from app.services import scans as scans_module
+    from tests.images import make_image
+
+    saved = trace._TRACER_PROVIDER  # noqa: SLF001
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(resource=telemetry.build_resource(Resource))
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    trace._TRACER_PROVIDER = provider  # noqa: SLF001
+
+    for name in ("a.jpg", "b.jpg"):
+        make_image(tmp_path / name)
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("database went away")
+
+    # Fail at the point the real import failed: after the files were processed.
+    monkeypatch.setattr(scans_module, "_reconcile_moves_and_missing", boom)
+    try:
+        assert client.post("/api/scan-roots", json={"path": str(tmp_path)}).status_code == 201
+        client.post("/api/scans", json={})
+        scan_spans = [s for s in exporter.get_finished_spans() if s.name == "scan"]
+    finally:
+        trace._TRACER_PROVIDER = saved  # noqa: SLF001
+
+    assert scan_spans, "the scan produced no span"
+    attributes = scan_spans[0].attributes or {}
+    assert attributes["error.type"] == "RuntimeError"
+    assert attributes["aperture.files_found"] == 2

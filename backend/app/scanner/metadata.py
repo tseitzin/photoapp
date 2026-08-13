@@ -57,18 +57,32 @@ def _parse_exif_datetime(value: object) -> datetime | None:
         return None
 
 
+def _without_nulls(value: str) -> str:
+    """Remove every NUL, wherever it sits in the string.
+
+    Postgres stores no \\x00 in `text` or `jsonb`, at any position, and one that
+    slips through fails the whole INSERT batch — which fails the scan, after it
+    has already indexed thousands of files. A real import died this way: a
+    Samsung camera pads the fixed-width ImageDescription with NULs and *then*
+    spaces, so `.strip("\\x00")` found a space at the end and removed nothing.
+
+    Stripping is the wrong tool regardless — a NUL in the middle of a value is
+    just as fatal and no amount of end-trimming reaches it.
+    """
+    return value.replace("\x00", "")
+
+
 def _clean_str(value: object) -> str | None:
     if not isinstance(value, str):
         return None
-    cleaned = value.strip().strip("\x00")
+    cleaned = _without_nulls(value).strip()
     return cleaned or None
 
 
 def _coerce_json_value(value: object) -> object | None:
     """Return a JSON-storable version of an EXIF value, or None to drop it."""
     if isinstance(value, str):
-        cleaned = value.strip("\x00")
-        return cleaned[:_EXIF_VALUE_MAX_LEN]
+        return _without_nulls(value)[:_EXIF_VALUE_MAX_LEN]
     if isinstance(value, bool | int):
         return value
     if isinstance(value, float):
